@@ -6,6 +6,7 @@
 All public, unauthenticated JSON APIs. Polite: small sleep between boards.
 Run verify_board(source, key) before adding any new board token.
 """
+import html
 import json
 import re
 import time
@@ -76,6 +77,17 @@ def _parse_dt(value):
         except ValueError:
             continue
     return None
+
+
+def html_to_text(s):
+    """HTML (possibly entity-escaped, as Greenhouse sends it) to plain text,
+    one line per block element."""
+    s = html.unescape(s or "")
+    s = re.sub(r"(?i)<\s*/?\s*(?:br|p|li|ul|ol|div|h[1-6]|tr)\b[^>]*>", "\n", s)
+    s = re.sub(r"<[^>]+>", " ", s)
+    s = html.unescape(s)
+    s = re.sub(r"[ \t\r\f\v\xa0]+", " ", s)
+    return "\n".join(line.strip() for line in s.split("\n") if line.strip())
 
 
 def matches_role(title, keywords):
