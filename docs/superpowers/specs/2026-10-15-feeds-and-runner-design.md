@@ -72,7 +72,7 @@ Each feed row becomes the normal job dict (`source: github/<name>`), plus
 | ashby | `jobs.ashbyhq.com/<slug>/<uuid>` | board list `api.ashbyhq.com/posting-api/job-board/<slug>`, fetched once per slug per run, then matched by id |
 | workday | `<tenant>.wdN.myworkdayjobs.com/[<locale>/]<board>/job/...` | `.../wday/cxs/<tenant>/<board>/job/...` (existing Workday detail parser) |
 | smartrecruiters | `jobs.smartrecruiters.com/<company>/<id>` | existing SmartRecruiters detail parser |
-| jobright | `jobright.ai/jobs/info/<id>` | the page's schema.org `JobPosting` JSON-LD → description + `jobLocation` country; `isH1bSponsor: true` becomes `sponsor ✓` when the description is silent |
+| jobright | `jobright.ai/jobs/info/<id>` | the page's schema.org `JobPosting` JSON-LD → description + `jobLocation` country; `isH1bSponsor: true` adds an `h1b history` tag (company history; never `sponsor ✓`). A bot-check redirect stops jobright fetches for the rest of the run and shows one `!` line |
 
 ### Filter changes
 
@@ -203,7 +203,7 @@ summary; default `pipeline/seen.db`) and, with `--direct` only, `--dry-run`
   osascript), total line.
 - End-to-end: `run_feeds.sh` against a copy of `seen.db` with add_job in
   dry-run mode (`runner.py --agent feeds --direct github --db <copy> --dry-run`), output shown to the user before
-  the first real `jobs`.
+  the first real `jobhunt`.
 
 ## Revisions after the live prototype run (2026-10-15 11:07)
 

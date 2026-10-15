@@ -1,7 +1,6 @@
 """Description facts for filters.py: get the text (cache-first), then extract
 YOE, stack terms and sponsorship wording. No keep/drop decisions here.
 """
-import html
 import json
 import re
 import sqlite3
@@ -12,6 +11,7 @@ import requests
 
 from add_job import normalize_url
 from fetchers import TIMEOUT, UA, _lever_text, html_to_text
+from progress import progress
 
 DETAIL_SLEEP = 1  # seconds between detail requests (SmartRecruiters / Workday)
 
@@ -150,6 +150,7 @@ def _ashby_detail(detail_url):
 _LD_JSON = re.compile(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', re.S)
 _H1B_FLAG = re.compile(r'"isH1bSponsor"\s*:\s*(true|false)')
 _H1B_MARK = re.compile(r"^\[jobright\] h1b_sponsor=(yes|no)$", re.M)
+_JOBRIGHT_BLOCKED = False  # set once jobright answers with its bot check; stops further requests
 
 
 def _jobright_detail(page):
@@ -174,15 +175,30 @@ def _jobright_detail(page):
     return "", ""
 
 
+def _jobright_fetch(url):
+    """jobright.ai answers bursts with a security check (303 to /_jr/security/challenge).
+    On the first one: say so once and skip jobright for the rest of the run."""
+    global _JOBRIGHT_BLOCKED
+    if _JOBRIGHT_BLOCKED:
+        raise LookupError("jobright blocked this run")
+    r = requests.get(url, headers=UA, timeout=TIMEOUT, allow_redirects=False)
+    time.sleep(DETAIL_SLEEP)
+    if r.status_code in (301, 302, 303, 307, 308, 403, 429):
+        _JOBRIGHT_BLOCKED = True
+        progress(f"! jobright: security check (HTTP {r.status_code}) — its remaining jobs "
+                 "keep 'desc ?' this run")
+        raise LookupError("jobright security check")
+    r.raise_for_status()
+    return _jobright_detail(r.text)
+
+
 def fetch_detail(job):
     """(description, country) from the job's detail_url. Raises on HTTP errors."""
     if job.get("ats") == "ashby":
         return _ashby_detail(job["detail_url"])
-    r = requests.get(job["detail_url"], headers=UA, timeout=TIMEOUT)
     if job.get("ats") == "jobright":
-        r.raise_for_status()
-        time.sleep(DETAIL_SLEEP)
-        return _jobright_detail(r.text)
+        return _jobright_fetch(job["detail_url"])
+    r = requests.get(job["detail_url"], headers=UA, timeout=TIMEOUT)
     r.raise_for_status()
     d = r.json()
     time.sleep(DETAIL_SLEEP)
@@ -241,8 +257,9 @@ def enrich_job(job, prof, con=None, fetch=fetch_detail):
     job["yoe_min"], job["yoe_max"] = extract_yoe(text)
     job["sponsorship"], job["sponsorship_phrase"] = extract_sponsorship(text, prof)
     mark = _H1B_MARK.search(text)
-    if mark and mark.group(1) == "yes" and not job.get("feed_sponsorship"):
-        job["feed_sponsorship"], job["feed_sponsorship_raw"] = "yes", "H-1B sponsor history"
+    if mark and mark.group(1) == "yes":
+        # company history, not a statement about this role: a tag, never sponsor ✓
+        job.setdefault("tags", []).append("h1b history")
     if job["sponsorship"] == "unknown" and job.get("feed_sponsorship"):
         # the description is silent: fall back to the feed's own field (Simplify)
         job["sponsorship"] = job["feed_sponsorship"]

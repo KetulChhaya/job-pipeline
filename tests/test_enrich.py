@@ -248,6 +248,7 @@ def test_jobright_page_description_country_and_h1b(prof, monkeypatch):
     import enrich
 
     class Page:
+        status_code = 200
         text = JOBRIGHT_PAGE
 
         def raise_for_status(self):
@@ -260,10 +261,37 @@ def test_jobright_page_description_country_and_h1b(prof, monkeypatch):
     j = enrich_job(_job(ats="jobright", detail_url="https://jobright.ai/jobs/info/x",
                         feed="jobright-swe-newgrad"), prof, fetch=lambda job: (text, country))
     assert (j["yoe_min"], j["country"]) == (1, "US")
-    assert (j["sponsorship"], j["sponsorship_phrase"]) == (
-        "yes", "jobright-swe-newgrad: H-1B sponsor history")
+    # company H-1B history is a hint, not a statement about this role
+    assert j["sponsorship"] == "unknown"
+    assert "h1b history" in j["tags"]
 
 
 def test_jobright_page_without_job_posting(monkeypatch):
     from enrich import _jobright_detail
     assert _jobright_detail("<html>no data</html>") == ("", "")
+
+
+def test_jobright_security_check_stops_further_requests(prof, monkeypatch, tmp_path):
+    import enrich
+    import progress
+    log = tmp_path / "p.log"
+    monkeypatch.setenv("JOB_PROGRESS_FILE", str(log))
+    progress.init("feeds")
+    calls = []
+
+    class Challenge:
+        status_code = 303
+        headers = {"location": "/_jr/security/challenge?return=%2Fjobs%2Finfo%2Fx"}
+        text = ""
+
+        def raise_for_status(self):
+            pass
+    monkeypatch.setattr(enrich.requests, "get", lambda url, **kw: calls.append(url) or Challenge())
+    monkeypatch.setattr(enrich.time, "sleep", lambda s: None)
+    monkeypatch.setattr(enrich, "_JOBRIGHT_BLOCKED", False)
+    for i in range(3):
+        j = enrich_job(_job(job_link=f"https://jobright.ai/jobs/info/{i}", ats="jobright",
+                            detail_url=f"https://jobright.ai/jobs/info/{i}"), prof)
+        assert "desc ?" in j["tags"]
+    assert len(calls) == 1
+    assert log.read_text().count("! jobright: security check") == 1

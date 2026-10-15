@@ -115,8 +115,9 @@ def run_filters(jobs, prof, con, agent, fetch=fetch_detail, today=None):
     fetched = [0]
 
     def counted(j):
-        fetched[0] += 1
-        return fetch(j)
+        text, country = fetch(j)
+        fetched[0] += bool(text)  # successes only
+        return text, country
     kept, rejected, skipped = [], [], 0
     for job in jobs:
         if (normalize_url(job.get("job_link")) in skip

@@ -81,8 +81,17 @@ def parse_claude_event(line):
                 inp = c.get("input") or {}
                 what = inp.get("description") or inp.get("command") or inp.get("file_path") or ""
                 out.append(("tool", f"{c.get('name')}: {what}"))
+                out.append(("log", f"$ {inp.get('command') or json.dumps(inp)}"))
+    elif kind == "user":
+        for c in (e.get("message") or {}).get("content") or []:
+            if isinstance(c, dict) and c.get("type") == "tool_result":
+                body = c.get("content")
+                if isinstance(body, list):
+                    body = "\n".join(x.get("text", "") for x in body if isinstance(x, dict))
+                out.append(("log", str(body or "")[:4000]))
     elif kind == "system" and e.get("subtype") == "permission_denied":
-        out.append(("denied", e.get("tool_name") or "tool"))
+        why = first_line(e.get("message") or "", 80)
+        out.append(("denied", f"{e.get('tool_name') or 'tool'}" + (f": {why}" if why else "")))
     elif kind == "result":
         out.append(("result", e.get("result") or ""))
         if e.get("is_error"):
@@ -121,8 +130,7 @@ def _stream(proc, stream, log, bangs):
                     print(f"  ! permission denied: {text}", flush=True)
                     log.write(f"! permission denied: {text}\n")
                 elif kind == "result":
-                    report = text.splitlines()
-                    log.write(text + "\n")
+                    report = text.splitlines()  # already logged as the last "say"
                 elif kind == "error":
                     bangs.append(f"agent reported an error: {text}")
                 else:
@@ -144,8 +152,9 @@ def run_agent(a, env, log, bangs):
     for attempt in range(1, a.retries + 1):
         stdin = open(a.stdin) if a.stdin else subprocess.DEVNULL
         try:
-            proc = subprocess.Popen(a.command, stdin=stdin, stdout=subprocess.PIPE,
-                                    stderr=log, text=True, env=env, cwd=ROOT)
+            proc = subprocess.Popen(a.command, stdin=stdin, stdout=subprocess.PIPE, stderr=log,
+                                    text=True, encoding="utf-8", errors="replace",
+                                    env=env, cwd=ROOT)
         except FileNotFoundError:
             bangs.append(f"command not found: {a.command[0]}")
             return 127, report
@@ -167,7 +176,7 @@ def run_direct(a, env, log, bangs):
     py = sys.executable
     cmd = [py, os.path.join(PIPE, "discover.py"), "--agent", a.agent,
            "--sources", a.direct, "--db", a.db, "--out-dir", a.runs_dir]
-    d = subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=ROOT)
+    d = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, cwd=ROOT)
     log.write(d.stdout + d.stderr)
     if d.returncode != 0:
         bangs.append(first_line(d.stderr.strip().splitlines()[-1] if d.stderr.strip() else "discover failed"))
@@ -175,7 +184,7 @@ def run_direct(a, env, log, bangs):
     found = json.loads(d.stdout)
     cmd = [py, os.path.join(PIPE, "add_job.py"), "--agent", a.agent,
            "--input", found["candidates_file"], "--db", a.db] + (["--dry-run"] if a.dry_run else [])
-    g = subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=ROOT)
+    g = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, cwd=ROOT)
     log.write(g.stdout + g.stderr)
     if g.returncode != 0:
         bangs.append(first_line(g.stderr.strip().splitlines()[-1] if g.stderr.strip() else "add_job failed"))

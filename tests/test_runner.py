@@ -20,9 +20,14 @@ def test_parse_claude_event_kinds():
          "input": {"command": "python3 pipeline/discover.py --agent claude", "description": "Run discovery"}},
         {"type": "text", "text": "Discovery done.\nDetails follow."}]}})
     assert parse_claude_event(tool) == [("tool", "Bash: Run discovery"),
+                                        ("log", "$ python3 pipeline/discover.py --agent claude"),
                                         ("say", "Discovery done.\nDetails follow.")]
-    denied = json.dumps({"type": "system", "subtype": "permission_denied", "tool_name": "Bash"})
-    assert parse_claude_event(denied) == [("denied", "Bash")]
+    denied = json.dumps({"type": "system", "subtype": "permission_denied", "tool_name": "Bash",
+                         "message": "rm -rf is not allowed"})
+    assert parse_claude_event(denied) == [("denied", "Bash: rm -rf is not allowed")]
+    result_of_tool = json.dumps({"type": "user", "message": {"content": [
+        {"type": "tool_result", "content": "{\"fetched\": 3}"}]}})
+    assert parse_claude_event(result_of_tool) == [("log", '{"fetched": 3}')]
     result = json.dumps({"type": "result", "subtype": "success", "result": "**Report**", "is_error": False})
     assert parse_claude_event(result) == [("result", "**Report**")]
     hook = json.dumps({"type": "system", "subtype": "hook_started"})
@@ -194,3 +199,13 @@ def test_direct_mode_runs_discover_then_add_job(tmp_path, capsys, monkeypatch):
     assert " 61  WPP" in out
     assert "  Run report:\n    fetched 70 · already appended 5 · kept 1 · would append 1" in out
     assert "    ! github/jobright-swe-newgrad: HTTPError: 503" in out
+
+
+def test_bad_bytes_on_agent_stdout_do_not_crash(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("JOB_NOTIFY", "0")
+    agent = tmp_path / "bad.py"
+    agent.write_text("import sys; sys.stdout.buffer.write(b'caf\\xff ok\\n')")
+    code = runner.main(["--agent", "bad", "--logs-dir", str(tmp_path), "--runs-dir", str(tmp_path),
+                        "--db", str(tmp_path / "none.db"), "--", sys.executable, str(agent)])
+    assert code == 0
+    assert "━━ Bad done" in capsys.readouterr().out
