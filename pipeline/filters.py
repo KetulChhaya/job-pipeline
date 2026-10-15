@@ -95,3 +95,33 @@ def load_profile(path):
     except re.error as e:
         raise ValueError(f"profile {path} has a bad pattern: {e}") from e
     return prof
+
+
+# ------------------------------------------------------------------ location
+def _segment_kind(seg, R):
+    without_states = R["us_states"].sub(" ", seg)  # "New Mexico" is not Mexico
+    if R["non_us_strong"].search(without_states):
+        return "non_us"
+    if (US_STATE_CODES.search(seg) or R["us_states"].search(seg)
+            or R["us_aliases"].search(seg) or R["us_cities"].search(seg)):
+        return "us"
+    if R["non_us_weak"].search(seg):
+        return "non_us"
+    return "unknown"
+
+
+def classify_location(location, country, prof):
+    """'us' | 'non_us' | 'ambiguous'. A structured country always wins."""
+    c = (country or "").strip().lower()
+    if c:
+        return "us" if c in US_ALIASES else "non_us"
+    text = _collapse(location)
+    if not text:
+        return "ambiguous"
+    kinds = [_segment_kind(s.strip(), prof["_re"])
+             for s in _SEGMENT_SPLIT.split(text) if s.strip()]
+    if "us" in kinds:
+        return "us"
+    if "non_us" in kinds:
+        return "non_us"
+    return "ambiguous"
