@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.jobpipeline.gemini</string>
+    <key>ProgramArguments</key>
+    <array><string>/path/to/job-pipeline/run_gemini.sh</string></array>
+    <key>WorkingDirectory</key><string>/path/to/job-pipeline</string>
+    <key>StartInterval</key><integer>21600</integer>
+    <key>StandardOutPath</key><string>/path/to/job-pipeline/logs/launchd-gemini.log</string>
+    <key>StandardErrorPath</key><string>/path/to/job-pipeline/logs/launchd-gemini.log</string>
+</dict>
+</plist>

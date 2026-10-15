@@ -1,0 +1,126 @@
+{
+ "_comment": "Board tokens verified 2026-10-15. Agents may APPEND new tokens only after verify passes. Never remove entries without noting it in the run report.",
+ "ashby": [
+  "openai",
+  "linear",
+  "ramp",
+  "notion",
+  "supabase",
+  "posthog",
+  "replit",
+  "cursor",
+  "plaid"
+ ],
+ "greenhouse": [
+  "stripe",
+  "coinbase",
+  "figma",
+  "datadog",
+  "robinhood",
+  "discord",
+  "airbnb",
+  "dropbox",
+  "pinterest",
+  "lyft",
+  "instacart",
+  "asana",
+  "cloudflare",
+  "mongodb",
+  "gitlab",
+  "databricks",
+  "elastic",
+  "twilio",
+  "reddit",
+  "airtable",
+  "brex",
+  "gusto",
+  "samsara",
+  "okta",
+  "anthropic",
+  "scaleai",
+  "affirm",
+  "vercel"
+ ],
+ "lever": [
+  "palantir",
+  "spotify"
+ ],
+ "location_keywords": [
+  "united states",
+  "usa",
+  "u.s.",
+  "remote"
+ ],
+ "smartrecruiters": [
+  "ServiceNow",
+  "Intuitive",
+  "Mirantis",
+  "WesternDigital",
+  "BoschGroup"
+ ],
+ "title_keywords": [
+  "software engineer",
+  "software developer",
+  "ai engineer",
+  "artificial intelligence engineer",
+  "backend engineer",
+  "back end engineer",
+  "full stack engineer",
+  "fullstack engineer",
+  "full-stack engineer",
+  "machine learning engineer",
+  "ml engineer",
+  "data engineer",
+  "platform engineer",
+  "devops engineer",
+  "site reliability engineer",
+  "sre",
+  "frontend engineer",
+  "front end engineer",
+  "mobile engineer",
+  "ios engineer",
+  "android engineer"
+ ],
+ "workday": [
+  {
+   "base_url": "https://nvidia.wd5.myworkdayjobs.com",
+   "board_path": "nvidia/NVIDIAExternalCareerSite"
+  },
+  {
+   "base_url": "https://salesforce.wd12.myworkdayjobs.com",
+   "board_path": "salesforce/External_Career_Site"
+  },
+  {
+   "base_url": "https://crowdstrike.wd5.myworkdayjobs.com",
+   "board_path": "crowdstrike/crowdstrikecareers"
+  },
+  {
+   "base_url": "https://intel.wd1.myworkdayjobs.com",
+   "board_path": "intel/External"
+  },
+  {
+   "base_url": "https://autodesk.wd1.myworkdayjobs.com",
+   "board_path": "autodesk/Ext"
+  },
+  {
+   "base_url": "https://paypal.wd1.myworkdayjobs.com",
+   "board_path": "paypal/jobs"
+  },
+  {
+   "base_url": "https://workday.wd5.myworkdayjobs.com",
+   "board_path": "workday/Workday"
+  },
+  {
+   "base_url": "https://hp.wd5.myworkdayjobs.com",
+   "board_path": "hp/ExternalCareerSite"
+  },
+  {
+   "base_url": "https://broadcom.wd1.myworkdayjobs.com",
+   "board_path": "broadcom/External_Career"
+  },
+  {
+   "base_url": "https://mastercard.wd1.myworkdayjobs.com",
+   "board_path": "mastercard/CorporateCareers"
+  }
+ ]
+}

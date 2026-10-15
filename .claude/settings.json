@@ -1,0 +1,1 @@
+{"permissions":{"allow":["Bash(python3 pipeline/discover.py:*)","Bash(python3 pipeline/add_job.py:*)","Bash(python3 -c:*)"]}}

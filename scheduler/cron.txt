@@ -1,0 +1,8 @@
+# Scheduler: cron (Linux / macOS). Staggered so the two agents never collide.
+# Replace /path/to/job-pipeline with the real path, then `crontab -e` and paste.
+
+# Claude: Greenhouse + Ashby + Lever, every 6h at :05
+5 */6 * * * /path/to/job-pipeline/run_claude.sh
+
+# Gemini: Workday + SmartRecruiters, every 6h at :35
+35 */6 * * * /path/to/job-pipeline/run_gemini.sh
