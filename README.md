@@ -89,6 +89,9 @@ One command runs every lane from any folder: `jobhunt` (alias for `run_all.sh`).
    report, and the log path with a ready `less +G <log>` command.
 4. At the end: one total line and one macOS notification.
 
+Pick lanes: `jobhunt feeds`, `jobhunt claude feeds` (any of `claude gemini feeds`, in order).
+Menu: `jobhunt menu` — numbered picks (several at once, e.g. `1 3`), plus a feeds dry run
+and "open the latest log".
 Single lanes: `./run_claude.sh`, `./run_gemini.sh`, `./run_feeds.sh`.
 Safe trial of the feeds lane (no sheet writes):
 `cp pipeline/seen.db /tmp/seen-copy.db && ./run_feeds.sh --dry-run --db /tmp/seen-copy.db`
