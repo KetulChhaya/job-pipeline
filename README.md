@@ -77,6 +77,22 @@ Then do one manual run of each to confirm end-to-end:
 4. A local SQLite registry (`pipeline/seen.db`) makes re-runs idempotent and
    keeps an audit trail.
 
+## Running it (`jobhunt`)
+
+One command runs every lane from any folder: `jobhunt` (alias for `run_all.sh`).
+
+1. Claude lane (Greenhouse, Ashby, Lever), then Gemini lane (Workday, SmartRecruiters),
+   then the GitHub feeds lane (SimplifyJobs, speedyapply, jobright; no LLM).
+2. While a lane runs: `·` lines come from the pipeline (per board, filter, append),
+   `›` lines are the agent's narration.
+3. After each lane: the jobs it appended (score, company, role, YOE, link), the agent's
+   report, and the log path with a ready `less +G <log>` command.
+4. At the end: one total line and one macOS notification.
+
+Single lanes: `./run_claude.sh`, `./run_gemini.sh`, `./run_feeds.sh`.
+Safe trial of the feeds lane (no sheet writes):
+`cp pipeline/seen.db /tmp/seen-copy.db && ./run_feeds.sh --dry-run --db /tmp/seen-copy.db`
+
 ## Monitoring
 
 - **Pipeline Runs** tab: one row per agent run (timestamp, sources, fetched,
