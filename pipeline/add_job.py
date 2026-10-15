@@ -23,6 +23,7 @@ import os
 import re
 import sqlite3
 import sys
+from collections import Counter
 from datetime import datetime
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
@@ -33,7 +34,7 @@ LINKEDIN_TAB = "LinkedIn Easy Apply"
 HEADER = ["Date posted", "Company", "Role", "Location", "YOE",
           "Job link", "Stack summary", "Notes", "Status"]
 RUNS_HEADER = ["Timestamp", "Agent", "Sources", "Fetched",
-               "Appended", "Dup URL", "Dup content", "Errors"]
+               "Appended", "Dup URL", "Dup content", "Errors", "Dropped"]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(ROOT, "pipeline", "seen.db")
@@ -84,6 +85,30 @@ def _ensure_tab(sh, title, header):
     return ws
 
 
+def _ensure_runs_header(ws):
+    """Older Pipeline Runs tabs have 8 columns; add the Dropped header."""
+    n = len(RUNS_HEADER)
+    if ws.col_count < n:
+        ws.add_cols(n - ws.col_count)
+    if ws.cell(1, n).value != RUNS_HEADER[-1]:
+        ws.update_cell(1, n, RUNS_HEADER[-1])
+
+
+def dropped_summary(input_path):
+    """'level 39, family 18, ...' from the sibling rejected_*.json, '-' if none."""
+    folder, name = os.path.split(input_path)
+    if not name.startswith("candidates_"):
+        return "-"
+    path = os.path.join(folder, "rejected_" + name[len("candidates_"):])
+    try:
+        with open(path) as f:
+            rejected = json.load(f)
+    except (OSError, ValueError):
+        return "-"
+    counts = Counter(r.get("reason") or "?" for r in rejected)
+    return ", ".join(f"{k} {v}" for k, v in counts.most_common()) or "none"
+
+
 def load_seen_from_sheet(sh):
     """(seen_urls, seen_content) from both job tabs."""
     seen_urls, seen_content = set(), set()
@@ -132,6 +157,8 @@ def main():
 
     with open(args.input) as f:
         candidates = json.load(f)
+    # best first; older candidate files have no score and keep their order
+    candidates.sort(key=lambda c: -(c.get("score") or 0))
 
     sa_path = (args.service_account
                or os.environ.get("GOOGLE_SERVICE_ACCOUNT")
@@ -201,12 +228,14 @@ def main():
 
     if use_sheet:
         runs = _ensure_tab(sh, RUNS_TAB, RUNS_HEADER)
+        _ensure_runs_header(runs)
         sources = sorted({(c.get("notes") or "").split(";")[0].replace("source:", "").strip()
                           for c in candidates if c.get("notes")})
         runs.append_row(
             [now, args.agent, ", ".join(sources) or "-",
              summary["fetched"], summary["appended"],
-             summary["dup_url"], summary["dup_content"], summary["errors"]],
+             summary["dup_url"], summary["dup_content"], summary["errors"],
+             dropped_summary(args.input)],
             value_input_option="RAW")
 
     print(json.dumps(summary, indent=1))
