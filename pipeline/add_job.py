@@ -27,6 +27,9 @@ from collections import Counter
 from datetime import datetime
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from progress import init as progress_init, progress  # noqa: E402
+
 SPREADSHEET_ID = os.environ.get("JOB_SHEET_ID", "1K4qWzt0ew0Dz4_PVn5iKKn3uf896Mhwzoi9uRqAJVoY")
 JOBS_TAB = "Pipeline Jobs"
 RUNS_TAB = "Pipeline Runs"
@@ -154,6 +157,7 @@ def main():
                     help="offline test: skip all Google Sheets I/O, still persist registry")
     ap.add_argument("--service-account", default=None)
     args = ap.parse_args()
+    progress_init(args.agent)
 
     with open(args.input) as f:
         candidates = json.load(f)
@@ -238,6 +242,9 @@ def main():
              dropped_summary(args.input)],
             value_input_option="RAW")
 
+    verb = "would append" if args.dry_run else "appended"
+    progress(f"{verb} {summary['appended']} to {JOBS_TAB} "
+             f"(dup link {summary['dup_url']}, dup content {summary['dup_content']})")
     print(json.dumps(summary, indent=1))
 
 

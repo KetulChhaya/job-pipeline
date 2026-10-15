@@ -52,3 +52,16 @@ def test_appends_best_score_first(tmp_path):
     _, con = _run(tmp_path, rows)
     order = [r[0] for r in con.execute("SELECT company FROM seen ORDER BY rowid")]
     assert order == ["high", "mid", "low"]
+
+
+def test_add_job_writes_a_progress_line(tmp_path):
+    rows = [{"company": "Acme", "role": "Software Engineer", "location": "NY",
+             "job_link": "https://x/a", "notes": "source: t"}]
+    inp = tmp_path / "candidates_test_y.json"
+    inp.write_text(json.dumps(rows))
+    log = tmp_path / "progress.log"
+    env = dict(os.environ, JOB_PROGRESS_FILE=str(log))
+    r = subprocess.run([sys.executable, ADD_JOB, "--agent", "test", "--input", str(inp), "--dry-run"],
+                       capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stderr
+    assert log.read_text() == "would append 1 to Pipeline Jobs (dup link 0, dup content 0)\n"

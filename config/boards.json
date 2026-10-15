@@ -112,5 +112,22 @@
    "base_url": "https://micron.wd1.myworkdayjobs.com",
    "board_path": "micron/External"
   }
+ ],
+ "github": [
+  {
+   "name": "simplify-newgrad",
+   "format": "simplify",
+   "url": "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json"
+  },
+  {
+   "name": "speedyapply-newgrad-usa",
+   "format": "speedyapply",
+   "url": "https://raw.githubusercontent.com/speedyapply/2027-SWE-College-Jobs/main/NEW_GRAD_USA.md"
+  },
+  {
+   "name": "jobright-swe-newgrad",
+   "format": "jobright",
+   "url": "https://raw.githubusercontent.com/jobright-ai/2026-Software-Engineer-New-Grad/master/README.md"
+  }
  ]
 }

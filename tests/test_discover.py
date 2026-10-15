@@ -102,3 +102,31 @@ def test_bad_profile_exits_before_fetching(tmp_path):
     assert r.returncode != 0
     assert "missing keys" in r.stderr
     assert not list(tmp_path.glob("candidates_*"))
+
+
+def test_same_company_and_title_recently_appended_is_skipped(con, prof):
+    from datetime import datetime
+    now = datetime.now().isoformat(timespec="seconds")
+    con.execute("INSERT INTO seen VALUES ('https://boards/1','k','Acme, Inc.','Software Engineer',"
+                "'NY','https://boards/1','claude','source: greenhouse/acme',?)", (now,))
+    feed_copy = job("https://jobright.ai/jobs/info/abc", company="Acme", role="Software Engineer",
+                    location="New York, NY, United States", source="github/jobright-swe-newgrad")
+    kept, rejected, skipped = run_filters([feed_copy], prof, con, "feeds", fetch=no_fetch)
+    assert (kept, rejected, skipped) == ([], [], 1)
+
+
+def test_progress_lines(tmp_path, monkeypatch, con, prof):
+    import discover
+    import progress
+    log = tmp_path / "progress.log"
+    monkeypatch.setenv("JOB_PROGRESS_FILE", str(log))
+    progress.init("test")
+    monkeypatch.setitem(discover.SOURCES, "github", lambda entry, hours: [job("https://x/1"), job("https://x/2", role="Intern")])
+    jobs, dead, errors = discover.fetch_all({"github": [{"name": "feed-a", "format": "simplify", "url": "u"}]},
+                                            ["github", "nope"], 30)
+    run_filters(jobs, prof, con, "test", fetch=no_fetch)
+    lines = log.read_text().splitlines()
+    assert lines[0] == "fetching 1 boards (github 1)"
+    assert lines[1].startswith("[ 1/1] github/feed-a") and lines[1].endswith("  2 fresh")
+    assert lines[-2:] == ["0 already appended · descriptions fetched: 0", "kept 1 · dropped family 1"]
+    assert errors == ["unknown source: nope"]

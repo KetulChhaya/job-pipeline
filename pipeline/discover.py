@@ -4,6 +4,7 @@ write the kept and rejected jobs to runs/.
 Usage:
     python discover.py --agent claude --sources greenhouse,ashby,lever
     python discover.py --agent gemini --sources workday,smartrecruiters
+    python discover.py --agent feeds --sources github
 
 Writes: runs/candidates_<agent>_<YYYYMMDD-HHMM>.json  (kept, best score first)
         runs/rejected_<agent>_<YYYYMMDD-HHMM>.json    (dropped, with reason)
@@ -15,14 +16,19 @@ import os
 import sqlite3
 import sys
 from collections import Counter
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from add_job import DB_PATH, _db, normalize_url  # noqa: E402
 from enrich import enrich_job, fetch_detail, init_cache, prune_cache  # noqa: E402
+from feeds import fetch_feed  # noqa: E402
 from fetchers import FETCHERS, load_config, verify_board  # noqa: E402
 from filters import (cap, company_key, full_check, load_profile,  # noqa: E402
-                     merge, quick_check, score)
+                     merge, quick_check, score, title_key)
+from progress import init as progress_init, progress  # noqa: E402
+
+SOURCES = dict(FETCHERS, github=fetch_feed)
+RECENT_TITLE_DAYS = 3
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -53,6 +59,14 @@ def count_today(con, today=None):
             "SELECT company FROM seen WHERE substr(first_seen, 1, 10) = ?", (today,)):
         counts[company_key(company)] += 1
     return dict(counts)
+
+
+def _recent_titles(con, days=RECENT_TITLE_DAYS):
+    """(company_key, title_key) of rows appended in the last `days` days, any
+    lane: the same posting reached through a feed, jobright or a board link."""
+    since = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+    return {(company_key(c), title_key(r)) for c, r in con.execute(
+        "SELECT company, role FROM seen WHERE first_seen >= ?", (since,))}
 
 
 def _skip_keys(con):
@@ -96,10 +110,17 @@ def finalize(job):
 def run_filters(jobs, prof, con, agent, fetch=fetch_detail, today=None):
     """Returns (kept, rejected, skipped). kept is sorted best score first and
     finalized; rejected is a list of _rej dicts; skipped counts known URLs."""
-    skip = _skip_keys(con)
+    skip, recent = _skip_keys(con), _recent_titles(con)
+    progress(f"filtering {len(jobs)} jobs")
+    fetched = [0]
+
+    def counted(j):
+        fetched[0] += 1
+        return fetch(j)
     kept, rejected, skipped = [], [], 0
     for job in jobs:
-        if normalize_url(job.get("job_link")) in skip:
+        if (normalize_url(job.get("job_link")) in skip
+                or (company_key(job.get("company")), title_key(job.get("role"))) in recent):
             skipped += 1
             continue
         c = quick_check(job, prof)
@@ -107,7 +128,7 @@ def run_filters(jobs, prof, con, agent, fetch=fetch_detail, today=None):
             rejected.append(_rej(job, c.reason, c.detail))
             continue
         job["tags"] = list(c.tags)
-        enrich_job(job, prof, con=con, fetch=fetch)
+        enrich_job(job, prof, con=con, fetch=counted)
         c = full_check(job, prof)
         if not c.keep:
             rejected.append(_rej(job, c.reason, c.detail))
@@ -123,32 +144,48 @@ def run_filters(jobs, prof, con, agent, fetch=fetch_detail, today=None):
         con.commit()
     except sqlite3.Error as e:  # the audit log must never block appends
         print(f"WARN: rejected log not written: {e}", file=sys.stderr)
+    drops = Counter(r["reason"] for r in rejected).most_common()
+    progress(f"{skipped} already appended · descriptions fetched: {fetched[0]}")
+    progress(f"kept {len(kept)} · dropped "
+             + (", ".join(f"{k} {n}" for k, n in drops) if drops else "none"))
     return [finalize(j) for j in kept], rejected, skipped
 
 
 # --------------------------------------------------------------------- fetch
+def _boards(cfg, src):
+    boards = cfg.get(src, [])
+    if src in ("workday", "github"):
+        boards = [b for b in boards if isinstance(b, dict)]  # {base_url, board_path} / {name, ...}
+    return boards
+
+
 def fetch_all(cfg, sources, hours):
     jobs, dead, errors = [], [], []
-    for src in sources:
-        if src not in FETCHERS:
-            errors.append(f"unknown source: {src}")
-            continue
-        boards = cfg.get(src, [])
-        if src == "workday":
-            boards = [b for b in boards if isinstance(b, dict)]  # {base_url, board_path}
+    plan = [(src, _boards(cfg, src)) for src in sources if src in SOURCES]
+    errors += [f"unknown source: {src}" for src in sources if src not in SOURCES]
+    total = sum(len(b) for _, b in plan)
+    progress(f"fetching {total} boards (" + ", ".join(f"{s} {len(b)}" for s, b in plan) + ")")
+    i = 0
+    for src, boards in plan:
         for key in boards:
-            label = key if isinstance(key, str) else key.get("board_path", key)
-            ok = verify_board(src, key if isinstance(key, str) else label)
-            if ok is False:
+            i += 1
+            label = key if isinstance(key, str) else (key.get("board_path") or key.get("name"))
+            tag = f"[{i:>2}/{total}] {src}/{label}"
+            if verify_board(src, label) is False:
                 dead.append(f"{src}/{label}")
+                progress(f"{tag:<46} dead")
                 continue
             try:
                 if src == "workday":
-                    jobs.extend(FETCHERS[src](key["base_url"], key["board_path"], hours=hours))
+                    got = SOURCES[src](key["base_url"], key["board_path"], hours=hours)
                 else:
-                    jobs.extend(FETCHERS[src](key, hours=hours))
+                    got = SOURCES[src](key, hours=hours)
             except Exception as e:  # per-board failure must not kill the run
                 errors.append(f"{src}/{label}: {type(e).__name__}: {e}")
+                progress(f"! {src}/{label}: {type(e).__name__}: {str(e)[:80]}")
+                continue
+            jobs.extend(got)
+            progress(f"{tag:<46} {len(got):>3} fresh")
     return jobs, dead, errors
 
 
@@ -162,7 +199,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agent", required=True)
     ap.add_argument("--sources", required=True,
-                    help="comma-separated: greenhouse,lever,ashby,smartrecruiters,workday")
+                    help="comma-separated: greenhouse,lever,ashby,smartrecruiters,workday,github")
     ap.add_argument("--hours", type=int, default=30,
                     help="lookback window; 30h gives overlap between 6h runs (dedup handles it)")
     ap.add_argument("--config", default=os.path.join(ROOT, "config", "boards.json"))
@@ -170,6 +207,7 @@ def main():
     ap.add_argument("--db", default=DB_PATH)
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "runs"))
     args = ap.parse_args()
+    progress_init(args.agent)
 
     try:
         prof = load_profile(args.profile)
