@@ -171,3 +171,94 @@ def quick_check(job, prof):
         if m:
             return Check(False, "sponsorship", m.group(0), ())
     return Check(True, None, None, tags)
+
+
+# --------------------------------------------------------------- description
+def full_check(job, prof):
+    """Uses fields set by enrich.enrich_job: country, description, yoe_min,
+    sponsorship, sponsorship_phrase, applied_ai_hit."""
+    country = (job.get("country") or "").strip()
+    if country and country.lower() not in US_ALIASES:
+        return Check(False, "location", country, ())
+    yoe = job.get("yoe_min")
+    if yoe is not None and yoe > prof["max_yoe"]:
+        return Check(False, "yoe", f"{yoe}+", ())
+    if (yoe is None and prof["senior_unknown_yoe"] == "drop"
+            and is_senior(job.get("role"), prof)):
+        return Check(False, "yoe", "senior, yoe unknown", ())
+    status = job.get("sponsorship", "unknown")
+    if status == "clearance":
+        return Check(False, "sponsorship", job.get("sponsorship_phrase", ""), ())
+    if status == "no" and prof["needs_sponsorship"]:
+        return Check(False, "sponsorship", job.get("sponsorship_phrase", ""), ())
+    tl = _collapse(job.get("role")).lower()
+    if (prof["_re"]["ml_titles"].search(tl) and job.get("description")
+            and not job.get("applied_ai_hit")):
+        return Check(False, "family", "ml-not-applied-ai", ())
+    return Check(True, None, None, ())
+
+
+# ------------------------------------------------------ score / merge / cap
+def score(job, prof):
+    w = prof["weights"]
+    pts = len(job.get("user_groups", [])) * w["user_stack_per_group"]
+    pts += len(job.get("ai_groups", [])) * w["ai_per_group"]
+    pts += w["yoe_known"] if job.get("yoe_min") is not None else w["yoe_unknown"]
+    pts += w["sponsor_yes"] if job.get("sponsorship") == "yes" else w["sponsor_unknown"]
+    return min(100, pts)
+
+
+def company_key(name):
+    words = re.sub(r"[^a-z0-9 ]", " ", (name or "").lower()).split()
+    return " ".join(w for w in words if w not in ("inc", "llc", "ltd"))
+
+
+def title_key(title):
+    return " ".join(re.sub(r"[^a-z0-9 ]", " ", (title or "").lower()).split())
+
+
+def merge(jobs):
+    """Collapse same company + title. Returns (merged, folded) where folded is
+    a list of (job, winner_link) for the rows that were absorbed."""
+    groups, order = {}, []
+    for j in jobs:
+        k = (company_key(j.get("company")), title_key(j.get("role")))
+        if k not in groups:
+            groups[k] = []
+            order.append(k)
+        groups[k].append(j)
+    merged, folded = [], []
+    for k in order:
+        g = sorted(groups[k], key=lambda j: -j.get("score", 0))
+        win = dict(g[0])
+        if len(g) > 1:
+            locs = []
+            for j in g:
+                loc = (j.get("location") or "").strip()
+                if loc and loc not in locs:
+                    locs.append(loc)
+            if len(locs) > 2:
+                win["location"] = f"{locs[0]}; {locs[1]} (+{len(locs) - 2} more)"
+            elif locs:
+                win["location"] = "; ".join(locs)
+            folded += [(j, win["job_link"]) for j in g[1:]]
+        merged.append(win)
+    return merged, folded
+
+
+def cap(jobs, prof, already_today):
+    """Keep at most per_company_per_day per company, best score first.
+    already_today: {company_key: rows appended today}. Returns (kept, capped)
+    where capped is a list of (job, detail)."""
+    limit = prof["per_company_per_day"]
+    taken = dict(already_today)
+    kept, capped = [], []
+    for j in sorted(jobs, key=lambda j: -j.get("score", 0)):
+        k = company_key(j.get("company"))
+        n = taken.get(k, 0)
+        if n >= limit:
+            capped.append((j, f"{k}: {n} today"))
+            continue
+        taken[k] = n + 1
+        kept.append(j)
+    return kept, capped
