@@ -1,0 +1,143 @@
+{
+ "_comment": "Candidate filter profile. Agents must NOT edit this file. Spec: docs/superpowers/specs/2026-10-15-job-filters-design.md. Patterns are case-insensitive regex fragments matched on whitespace-collapsed text with letter/digit boundaries; wrap a part in (?-i:...) to make it case-sensitive.",
+ "max_yoe": 5,
+ "senior_unknown_yoe": "keep",
+ "per_company_per_day": 3,
+ "needs_sponsorship": true,
+ "location": {
+  "ambiguous_remote": "keep",
+  "us_cities": [
+   "san francisco", "sf", "bay area", "seattle", "new york city", "nyc", "brooklyn",
+   "boston", "austin", "los angeles", "chicago", "denver", "boulder", "atlanta",
+   "sunnyvale", "mountain view", "palo alto", "menlo park", "san jose", "santa clara",
+   "cupertino", "san mateo", "redwood city", "pleasanton", "irvine", "san diego",
+   "redmond", "bellevue", "kirkland", "pittsburgh", "philadelphia", "miami", "dallas",
+   "houston", "portland", "salt lake city", "raleigh", "durham", "nashville", "phoenix",
+   "minneapolis", "detroit", "columbus", "charlotte", "st\\.? louis", "kansas city",
+   "jersey city", "hoboken"
+  ],
+  "non_us_strong": [
+   "canada", "toronto", "montreal", "ottawa", "waterloo", "calgary",
+   "ontario", "quebec", "british columbia", "brazil", "brasil", "s[ãa]o paulo", "mexico",
+   "india", "bangalore", "bengaluru", "hyderabad", "pune", "chennai", "gurgaon",
+   "gurugram", "noida", "mumbai", "united kingdom", "uk", "england", "scotland",
+   "ireland", "germany", "berlin", "munich", "france", "spain", "madrid", "barcelona",
+   "netherlands", "amsterdam", "poland", "warsaw", "krakow", "singapore", "japan",
+   "tokyo", "australia", "sydney", "melbourne", "israel", "tel aviv", "portugal",
+   "lisbon", "romania", "bucharest", "serbia", "belgrade", "argentina", "buenos aires",
+   "colombia", "bogota", "chile", "philippines", "manila", "vietnam", "china", "beijing",
+   "shanghai", "shenzhen", "hong kong", "korea", "seoul", "taiwan", "taipei", "czech",
+   "prague", "sweden", "stockholm", "switzerland", "zurich", "italy", "milan", "belgium",
+   "brussels", "denmark", "copenhagen", "finland", "helsinki", "norway", "oslo",
+   "austria", "vienna", "hungary", "budapest", "ukraine", "kyiv", "turkey", "istanbul",
+   "egypt", "cairo", "nigeria", "lagos", "kenya", "nairobi", "south africa", "uae",
+   "dubai", "abu dhabi", "saudi", "riyadh", "pakistan", "new zealand", "greece",
+   "athens", "estonia", "lithuania", "latvia", "bulgaria", "croatia", "costa rica",
+   "uruguay", "peru", "latam", "emea", "apac", "europe", "asia"
+  ],
+  "non_us_weak": ["london", "dublin", "paris", "cambridge", "vancouver"]
+ },
+ "family": {
+  "keep": [
+   "software engineer(?:ing)?", "software developer", "software development engineer",
+   "sde", "mts", "member of (?:the )?technical staff", "back-?end", "back end",
+   "full-?stack", "full stack", "ai engineer", "applied ai", "llm engineer",
+   "gen ?ai engineer", "generative ai engineer", "agents? engineer", "product engineer",
+   "api engineer", "software platform engineer", "machine learning engineer", "ml engineer"
+  ],
+  "drop": [
+   "system software", "systems software", "soc", "firmware", "embedded", "kernel",
+   "drivers?", "cuda", "asic", "fpga", "silicon", "eda", "validation engineer",
+   "verification engineer", "design verification", "system validation", "hardware",
+   "mfg", "manufacturing", "security engineer", "cybersecurity", "penetration", "pen ?test(?:ing|er)?", "sales engineer",
+   "solutions? engineer", "support engineer", "solutions architect", "devops", "sre",
+   "site reliability", "data engineer", "mobile", "ios", "android", "client platform",
+   "network engineer", "(?<!software )platform engineer", "sdet", "qa engineer",
+   "test engineer", "software engineer in test", "quality engineer"
+  ],
+  "frontend": ["front-?end", "front end"],
+  "ml_titles": ["machine learning engineer", "ml engineer"],
+  "ml_requires_any": [
+   "llms?", "large language models?", "rag", "retrieval[- ]augmented", "agents?",
+   "agentic", "gen ?ai", "generative ai", "bedrock", "langchain", "prompt(?:s|ing)?"
+  ]
+ },
+ "level": {
+  "drop": [
+   "staff", "principal", "lead", "architect", "distinguished", "fellow", "manager",
+   "director", "head of", "vp", "vice president", "intern", "internship",
+   "new grad(?:uate)?", "new college grad(?:uate)?", "college grad(?:uate)?",
+   "graduate", "university", "amts", "lmts", "pmts"
+  ],
+  "senior": ["senior", "sr\\.?", "snr", "smts"]
+ },
+ "citizenship_title": ["govcloud", "federal", "cleared", "clearance", "ts/sci", "top secret", "secret"],
+ "sponsorship": {
+  "negative": [
+   "(?:unable|not able|cannot|can ?not|can't|will not|won't|do not|does not|don't|doesn't|are not able|is not able) (?:to )?(?:provide |offer |support )?(?:visa |immigration |employment )?sponsor(?:ship|ing)?",
+   "without (?:the need for |requiring )?(?:current or future |now or in the future |future )?(?:visa |employment |immigration |work )?sponsorship",
+   "no (?:visa |immigration )?sponsorship",
+   "sponsorship (?:is )?not (?:available|offered|provided|supported)",
+   "not (?:eligible|available) for (?:visa |immigration )?sponsorship",
+   "must be a u\\.?s\\.? citizen",
+   "u\\.?s\\.? citizen(?:ship)? (?:is )?(?:required|only)",
+   "u\\.?s\\.? citizens only",
+   "green card holders?"
+  ],
+  "clearance": [
+   "(?:active|current|ability to obtain|able to obtain|eligib(?:le|ility) (?:for|to obtain)|must (?:obtain|hold|possess|have)) (?:an? |and maintain (?:an? )?)?(?:[a-z/]+ ){0,3}?clearance",
+   "ts/sci", "top secret", "secret clearance", "itar", "u\\.?s\\.? persons?"
+  ],
+  "positive": [
+   "(?:will|can|able to|happy to|glad to) sponsor",
+   "(?:visa )?sponsorship (?:is )?available",
+   "h-?1b (?:visa )?(?:sponsorship|transfers?) (?:is |are )?(?:available|supported|welcome)",
+   "we sponsor (?:visas|h-?1b)"
+  ]
+ },
+ "stack": {
+  "user_groups": {
+   "typescript": "typescript|javascript",
+   "node": "node\\.?js|(?-i:Node)|nest\\.?js|express\\.?js",
+   "react": "react\\.?js|(?-i:React)|next\\.?js",
+   "python": "python",
+   "python_web": "fastapi|django|(?-i:Flask)"
+  },
+  "ai_groups": {
+   "llm": "llms?|large language models?|gen ?ai|generative ai",
+   "rag": "rag|retrieval[- ]augmented|embeddings?|vector (?:db|database|store|search)|pgvector|pinecone|weaviate",
+   "agents": "ai agents?|agentic|multi-agent|llm agents?|agent (?:framework|development|platform|orchestration)",
+   "frameworks": "(?-i:Bedrock)|langchain|llamaindex|openai|anthropic|(?-i:Claude)",
+   "prompt": "prompt engineering|prompt design|prompting|system prompts?"
+  },
+  "user_terms": ["Python", "TypeScript", "JavaScript", "Node.js", "React", "Next.js", "FastAPI", "Django", "Flask"],
+  "dictionary": {
+   "Python": "python", "TypeScript": "typescript", "JavaScript": "javascript",
+   "Node.js": "node\\.?js|(?-i:Node)", "React": "react\\.?js|(?-i:React)",
+   "Next.js": "next\\.?js", "FastAPI": "fastapi", "Django": "django", "Flask": "(?-i:Flask)",
+   "Java": "(?-i:Java)", "Kotlin": "kotlin", "Go": "golang|(?-i:Go)", "Rust": "(?-i:Rust)",
+   "C++": "c\\+\\+", "C#": "c#", "Ruby": "ruby", "Scala": "(?-i:Scala)",
+   "GraphQL": "graphql", "Express": "express\\.?js", "NestJS": "nest\\.?js",
+   "Spring": "spring boot|(?-i:Spring)", "Rails": "ruby on rails|(?-i:Rails)", ".NET": "\\.net",
+   "AWS": "aws|amazon web services", "GCP": "gcp|google cloud", "Azure": "(?-i:Azure)",
+   "Kubernetes": "kubernetes|k8s", "Docker": "docker", "Terraform": "terraform",
+   "Lambda": "(?-i:Lambda)", "Postgres": "postgres(?:ql)?", "MySQL": "mysql",
+   "MongoDB": "mongo(?:db)?", "Redis": "redis", "Kafka": "kafka", "Spark": "(?-i:Spark)",
+   "Snowflake": "(?-i:Snowflake)", "DynamoDB": "dynamo(?:db)?",
+   "LLM": "llms?|large language models?|gen ?ai|generative ai", "RAG": "rag|retrieval[- ]augmented",
+   "Agents": "ai agents?|agentic|multi-agent|llm agents?", "Bedrock": "(?-i:Bedrock)",
+   "LangChain": "langchain", "OpenAI": "openai", "Claude": "anthropic|(?-i:Claude)",
+   "Embeddings": "embeddings?",
+   "Vector DB": "vector (?:db|database|store|search)|pgvector|pinecone|weaviate|qdrant",
+   "PyTorch": "pytorch"
+  }
+ },
+ "weights": {
+  "user_stack_per_group": 10,
+  "ai_per_group": 5,
+  "yoe_known": 15,
+  "yoe_unknown": 8,
+  "sponsor_yes": 10,
+  "sponsor_unknown": 5
+ }
+}

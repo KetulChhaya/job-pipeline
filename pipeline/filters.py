@@ -1,0 +1,97 @@
+"""Keep/drop decisions for normalized job dicts, driven by config/profile.json.
+
+quick_check: title + location, before any description is fetched.
+full_check:  description facts that enrich.enrich_job wrote into the job.
+score / merge / cap: ranking and per-company limits for the survivors.
+
+Every check returns Check(keep, reason, detail, tags). Nothing here does I/O
+except load_profile.
+"""
+import json
+import re
+from collections import namedtuple
+
+Check = namedtuple("Check", "keep reason detail tags")
+
+REQUIRED_KEYS = ["max_yoe", "senior_unknown_yoe", "per_company_per_day",
+                 "needs_sponsorship", "location", "family", "level",
+                 "citizenship_title", "sponsorship", "stack", "weights"]
+
+US_STATES = [
+    "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
+    "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho",
+    "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana",
+    "maine", "maryland", "massachusetts", "michigan", "minnesota",
+    "mississippi", "missouri", "montana", "nebraska", "nevada",
+    "new hampshire", "new jersey", "new mexico", "new york",
+    "north carolina", "north dakota", "ohio", "oklahoma", "oregon",
+    "pennsylvania", "rhode island", "south carolina", "south dakota",
+    "tennessee", "texas", "utah", "vermont", "virginia", "washington",
+    "west virginia", "wisconsin", "wyoming", "district of columbia",
+]
+# Upper-case only, matched case-sensitively. IN is left out on purpose:
+# "Bengaluru, IN" is India far more often than Indiana.
+US_STATE_CODES = re.compile(
+    r"(?<![A-Za-z0-9])(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IA|KS|KY|LA|ME|"
+    r"MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|"
+    r"UT|VT|VA|WA|WV|WI|WY|DC)(?![A-Za-z0-9])")
+US_ALIASES = {"us", "usa", "u.s.", "u.s.a.", "united states",
+              "united states of america"}
+_US_WORDS = r"united states(?: of america)?|u\.s\.(?:a\.)?|usa|(?-i:US)"
+_SEGMENT_SPLIT = re.compile(r"[;|\n/]| or ")
+_MTS_LONG = re.compile(r"member of (?:the )?technical staff", re.I)
+
+
+def _rx(fragments):
+    """Case-insensitive alternation bounded by non-alphanumerics."""
+    if isinstance(fragments, str):
+        fragments = [fragments]
+    if not fragments:
+        return re.compile(r"(?!x)x")  # never matches
+    return re.compile(r"(?<![a-z0-9])(?:" + "|".join(fragments) + r")(?![a-z0-9])",
+                      re.I)
+
+
+def _collapse(s):
+    return " ".join((s or "").split())
+
+
+def load_profile(path):
+    """Load and compile config/profile.json. Raises ValueError on any problem."""
+    try:
+        with open(path) as f:
+            prof = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        raise ValueError(f"cannot read profile {path}: {e}") from e
+    missing = [k for k in REQUIRED_KEYS if k not in prof]
+    if missing:
+        raise ValueError(f"profile {path} missing keys: {', '.join(missing)}")
+    loc, fam, lvl = prof["location"], prof["family"], prof["level"]
+    sp, st = prof["sponsorship"], prof["stack"]
+    try:
+        prof["_re"] = {
+            "us_states": _rx(US_STATES),
+            "us_aliases": _rx(_US_WORDS),
+            "us_cities": _rx(loc["us_cities"]),
+            "non_us_strong": _rx(loc["non_us_strong"]),
+            "non_us_weak": _rx(loc["non_us_weak"]),
+            "family_keep": _rx(fam["keep"]),
+            "family_drop": _rx(fam["drop"]),
+            "frontend": _rx(fam["frontend"]),
+            "ml_titles": _rx(fam["ml_titles"]),
+            "ml_requires_any": _rx(fam["ml_requires_any"]),
+            "level_drop": _rx(lvl["drop"]),
+            "level_senior": _rx(lvl["senior"]),
+            "citizenship_title": _rx(prof["citizenship_title"]),
+            "sponsor_neg": _rx(sp["negative"]),
+            "sponsor_pos": _rx(sp["positive"]),
+            "clearance": _rx(sp["clearance"]),
+            "user_groups": {k: _rx(v) for k, v in st["user_groups"].items()},
+            "ai_groups": {k: _rx(v) for k, v in st["ai_groups"].items()},
+            "dictionary": [(name, _rx(p)) for name, p in st["dictionary"].items()],
+        }
+    except KeyError as e:
+        raise ValueError(f"profile {path} missing key: {e}") from e
+    except re.error as e:
+        raise ValueError(f"profile {path} has a bad pattern: {e}") from e
+    return prof
