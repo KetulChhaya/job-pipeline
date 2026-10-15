@@ -8,5 +8,6 @@ cd "$(dirname "$0")"
 export PATH="$PWD/.venv/bin:$PATH"
 exec python3 pipeline/runner.py --agent claude --label "Greenhouse · Ashby · Lever" \
   --stdin prompts/claude.md --stream claude -- \
-  claude -p --verbose --output-format stream-json --permission-mode acceptEdits \
+  claude -p --model claude-sonnet-5-5 --effort high \
+  --verbose --output-format stream-json --permission-mode acceptEdits \
   --allowedTools "Bash(python3 pipeline/*)" "Bash(python3 -c:*)" "Read" "Edit(pipeline/fetchers.py)" "Edit(config/boards.json)"

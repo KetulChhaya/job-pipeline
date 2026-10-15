@@ -11,4 +11,5 @@ export PATH="$HOME/.local/bin:$PWD/.venv/bin:$PATH"
 # Transient API errors (e.g. 503 high demand): the runner retries the whole run.
 exec python3 pipeline/runner.py --agent gemini --label "Workday · SmartRecruiters" \
   --stream lines --retries 3 --retry-wait 120 -- \
-  agy -p "$(cat prompts/gemini.md)" --dangerously-skip-permissions --print-timeout 20m
+  agy -p "$(cat prompts/gemini.md)" --model gemini-3.8-flash-medium \
+  --dangerously-skip-permissions --print-timeout 20m
