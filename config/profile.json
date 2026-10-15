@@ -69,7 +69,9 @@
    "new grad(?:uate)?", "new college grad(?:uate)?", "college grad(?:uate)?",
    "graduate", "university", "amts", "lmts", "pmts"
   ],
-  "senior": ["senior", "sr\\.?", "snr", "smts"]
+  "senior": ["senior", "sr\\.?", "snr", "smts"],
+  "feed_allow": ["new grad(?:uate)?", "new college grad(?:uate)?", "college grad(?:uate)?",
+                 "graduate", "university", "amts"]
  },
  "citizenship_title": ["govcloud", "federal", "cleared", "clearance", "ts/sci", "top secret", "secret"],
  "sponsorship": {
@@ -83,10 +85,13 @@
    "must be a u\\.?s\\.? citizen",
    "u\\.?s\\.? citizen(?:ship)? (?:is )?(?:required|only)",
    "u\\.?s\\.? citizens only",
+   "(?:u\\.?s\\.? )?citizenship is (?:a )?requirement",
+   "requires? (?:u\\.?s\\.? )?citizenship",
    "green card holders?"
   ],
   "clearance": [
    "(?:active|current|ability to obtain|able to obtain|eligib(?:le|ility) (?:for|to obtain)|must (?:obtain|hold|possess|have)) (?:an? |and maintain (?:an? )?)?(?:[a-z/]+ ){0,3}?clearance",
+   "obtain (?:and maintain )?(?:an? )?(?:[a-z/]+ ){0,3}?clearance",
    "ts/sci", "top secret", "secret clearance", "itar", "u\\.?s\\.? persons?"
   ],
   "positive": [

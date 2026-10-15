@@ -1,6 +1,8 @@
 """Description facts for filters.py: get the text (cache-first), then extract
 YOE, stack terms and sponsorship wording. No keep/drop decisions here.
 """
+import html
+import json
 import re
 import sqlite3
 import time
@@ -9,7 +11,7 @@ from datetime import datetime, timedelta
 import requests
 
 from add_job import normalize_url
-from fetchers import TIMEOUT, UA, html_to_text
+from fetchers import TIMEOUT, UA, _lever_text, html_to_text
 
 DETAIL_SLEEP = 1  # seconds between detail requests (SmartRecruiters / Workday)
 
@@ -125,9 +127,62 @@ def prune_cache(con, days=3):
     con.commit()
 
 
+_ASHBY_BOARDS = {}  # board list url -> {job id: posting}, or None if it failed
+
+
+def _ashby_detail(detail_url):
+    """Ashby has no single-posting endpoint: fetch the board once per run."""
+    board_url, job_id = detail_url.split("#", 1)
+    if board_url not in _ASHBY_BOARDS:
+        _ASHBY_BOARDS[board_url] = None
+        r = requests.get(board_url, headers=UA, timeout=TIMEOUT)
+        r.raise_for_status()
+        _ASHBY_BOARDS[board_url] = {j.get("id"): j for j in r.json().get("jobs", [])}
+        time.sleep(DETAIL_SLEEP)
+    board = _ASHBY_BOARDS[board_url]
+    if board is None or job_id not in board:
+        raise LookupError(f"ashby posting {job_id} not available")
+    j = board[job_id]
+    country = ((j.get("address") or {}).get("postalAddress") or {}).get("addressCountry") or ""
+    return j.get("descriptionPlain") or "", country
+
+
+_LD_JSON = re.compile(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', re.S)
+_H1B_FLAG = re.compile(r'"isH1bSponsor"\s*:\s*(true|false)')
+_H1B_MARK = re.compile(r"^\[jobright\] h1b_sponsor=(yes|no)$", re.M)
+
+
+def _jobright_detail(page):
+    """(description, country) from a jobright.ai job page. The company's H-1B
+    history is kept as a marker line that enrich_job reads (and the cache keeps)."""
+    for block in _LD_JSON.findall(page):
+        try:
+            data = json.loads(block)
+        except ValueError:
+            continue
+        for item in data if isinstance(data, list) else [data]:
+            if isinstance(item, dict) and item.get("@type") == "JobPosting":
+                text = html_to_text(item.get("description") or "")
+                where = item.get("jobLocation") or {}
+                where = where[0] if isinstance(where, list) and where else where
+                country = ((where.get("address") or {}).get("addressCountry") or ""
+                           if isinstance(where, dict) else "")
+                flag = _H1B_FLAG.search(page)
+                if text and flag:
+                    text += f"\n[jobright] h1b_sponsor={'yes' if flag.group(1) == 'true' else 'no'}"
+                return text, country
+    return "", ""
+
+
 def fetch_detail(job):
     """(description, country) from the job's detail_url. Raises on HTTP errors."""
+    if job.get("ats") == "ashby":
+        return _ashby_detail(job["detail_url"])
     r = requests.get(job["detail_url"], headers=UA, timeout=TIMEOUT)
+    if job.get("ats") == "jobright":
+        r.raise_for_status()
+        time.sleep(DETAIL_SLEEP)
+        return _jobright_detail(r.text)
     r.raise_for_status()
     d = r.json()
     time.sleep(DETAIL_SLEEP)
@@ -142,11 +197,16 @@ def fetch_detail(job):
         info = d.get("jobPostingInfo") or {}
         return (html_to_text(info.get("jobDescription") or ""),
                 (info.get("country") or {}).get("descriptor") or "")
+    if job.get("ats") == "greenhouse":
+        return html_to_text(d.get("content") or ""), ""
+    if job.get("ats") == "lever":
+        return _lever_text(d), d.get("country") or ""
     return "", ""
 
 
 def enrich_job(job, prof, con=None, fetch=fetch_detail):
     """Fill description-derived fields in place and return the job.
+    Feed jobs fall back to job["feed_sponsorship"] when the text is silent.
     Sets: description, country (if learned), yoe_min, yoe_max, sponsorship,
     sponsorship_phrase, user_groups, ai_groups, stack_terms, applied_ai_hit.
     Appends 'desc ?' to job['tags'] when no description could be had."""
@@ -180,6 +240,13 @@ def enrich_job(job, prof, con=None, fetch=fetch_detail):
     R = prof["_re"]
     job["yoe_min"], job["yoe_max"] = extract_yoe(text)
     job["sponsorship"], job["sponsorship_phrase"] = extract_sponsorship(text, prof)
+    mark = _H1B_MARK.search(text)
+    if mark and mark.group(1) == "yes" and not job.get("feed_sponsorship"):
+        job["feed_sponsorship"], job["feed_sponsorship_raw"] = "yes", "H-1B sponsor history"
+    if job["sponsorship"] == "unknown" and job.get("feed_sponsorship"):
+        # the description is silent: fall back to the feed's own field (Simplify)
+        job["sponsorship"] = job["feed_sponsorship"]
+        job["sponsorship_phrase"] = f"{job.get('feed', 'feed')}: {job.get('feed_sponsorship_raw', '')}"
     job["user_groups"] = matched_groups(both, R["user_groups"])
     job["ai_groups"] = matched_groups(both, R["ai_groups"])
     job["stack_terms"] = extract_stack(both, prof)
