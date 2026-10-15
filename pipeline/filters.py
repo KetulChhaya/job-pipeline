@@ -81,6 +81,7 @@ def load_profile(path):
             "ml_titles": _rx(fam["ml_titles"]),
             "ml_requires_any": _rx(fam["ml_requires_any"]),
             "level_drop": _rx(lvl["drop"]),
+            "level_drop_feed": _rx([f for f in lvl["drop"] if f not in lvl.get("feed_allow", [])]),
             "level_senior": _rx(lvl["senior"]),
             "citizenship_title": _rx(prof["citizenship_title"]),
             "sponsor_neg": _rx(sp["negative"]),
@@ -177,7 +178,8 @@ def quick_check(job, prof):
     fam = _family_drop(tl, R)
     if fam:
         return Check(False, "family", fam, ())
-    m = R["level_drop"].search(_level_title(tl))
+    level = R["level_drop_feed"] if job.get("feed") else R["level_drop"]
+    m = level.search(_level_title(tl))
     if m:
         return Check(False, "level", m.group(0), ())
     if prof["needs_sponsorship"]:

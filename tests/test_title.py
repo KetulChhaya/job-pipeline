@@ -86,3 +86,20 @@ def test_govcloud_kept_when_sponsorship_not_needed(prof):
 ])
 def test_is_senior(prof, role, expected):
     assert is_senior(role, prof) is expected
+
+
+@pytest.mark.parametrize("role", [
+    "Software Engineer - New Grad 2026",
+    "Software Engineer, New College Graduate",
+    "Software Engineering AMTS (College Grad)",
+    "University Graduate - Backend Engineer",
+])
+def test_feed_jobs_keep_new_grad_titles(prof, role):
+    assert not quick_check(job(role), prof).keep          # board lanes: still dropped
+    assert quick_check(dict(job(role), feed="simplify-newgrad"), prof).keep
+
+
+@pytest.mark.parametrize("role", ["Software Engineer Intern", "Staff Software Engineer",
+                                  "Software Engineering Manager, Platform"])
+def test_feed_jobs_still_drop_other_levels(prof, role):
+    assert quick_check(dict(job(role), feed="simplify-newgrad"), prof).reason == "level"
