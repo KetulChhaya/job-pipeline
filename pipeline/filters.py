@@ -125,3 +125,49 @@ def classify_location(location, country, prof):
     if "non_us" in kinds:
         return "non_us"
     return "ambiguous"
+
+
+# --------------------------------------------------------------------- title
+def _level_title(title_l):
+    return _MTS_LONG.sub("mts", title_l)
+
+
+def is_senior(title, prof):
+    return bool(prof["_re"]["level_senior"].search(_level_title(_collapse(title).lower())))
+
+
+def _family_drop(title_l, R):
+    """Matched drop term, 'not-swe', or None when the family is wanted."""
+    m = R["family_drop"].search(title_l)
+    if m:
+        return m.group(0)
+    m = R["frontend"].search(title_l)
+    if m and "full" not in title_l:
+        return m.group(0)
+    if not R["family_keep"].search(title_l):
+        return "not-swe"
+    return None
+
+
+def quick_check(job, prof):
+    R = prof["_re"]
+    tl = _collapse(job.get("role")).lower()
+    tags = ()
+    where = classify_location(job.get("location"), job.get("country"), prof)
+    if where == "non_us":
+        return Check(False, "location", job.get("country") or job.get("location") or "", ())
+    if where == "ambiguous":
+        if prof["location"]["ambiguous_remote"] == "drop":
+            return Check(False, "location", "ambiguous", ())
+        tags = ("loc ?",)
+    fam = _family_drop(tl, R)
+    if fam:
+        return Check(False, "family", fam, ())
+    m = R["level_drop"].search(_level_title(tl))
+    if m:
+        return Check(False, "level", m.group(0), ())
+    if prof["needs_sponsorship"]:
+        m = R["citizenship_title"].search(tl)
+        if m:
+            return Check(False, "sponsorship", m.group(0), ())
+    return Check(True, None, None, tags)
