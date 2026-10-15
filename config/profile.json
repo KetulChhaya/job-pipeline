@@ -12,7 +12,7 @@
    "sunnyvale", "mountain view", "palo alto", "menlo park", "san jose", "santa clara",
    "cupertino", "san mateo", "redwood city", "pleasanton", "irvine", "san diego",
    "redmond", "bellevue", "kirkland", "pittsburgh", "philadelphia", "miami", "dallas",
-   "houston", "portland", "salt lake city", "raleigh", "durham", "nashville", "phoenix",
+   "houston", "portland", "salt lake city", "raleigh", "nashville", "phoenix",
    "minneapolis", "detroit", "columbus", "charlotte", "st\\.? louis", "kansas city",
    "jersey city", "hoboken"
   ],
@@ -74,11 +74,12 @@
  "citizenship_title": ["govcloud", "federal", "cleared", "clearance", "ts/sci", "top secret", "secret"],
  "sponsorship": {
   "negative": [
-   "(?:unable|not able|cannot|can ?not|can't|will not|won't|do not|does not|don't|doesn't|are not able|is not able) (?:to )?(?:provide |offer |support )?(?:visa |immigration |employment )?sponsor(?:ship|ing)?",
-   "without (?:the need for |requiring )?(?:current or future |now or in the future |future )?(?:visa |employment |immigration |work )?sponsorship",
+   "(?:(?:will|would|do|does|did|are|is|can|could) )?(?:unable|cannot|can ?not|[a-z]+n't|not|never|no longer)(?: (?:currently|presently|yet|be|able|to|in a position to|going to|at this time))* (?:to )?(?:provide |offer |support |grant )?(?:visa |immigration |employment |work |h-?1b )*sponsor(?:ship|ing)?",
+   "without (?:the need for |needing |requiring )?(?:current or future |now or in the future |future )?(?:visa |employment |employer |immigration |work )?sponsorship(?! for an? export)",
    "no (?:visa |immigration )?sponsorship",
-   "sponsorship (?:is )?not (?:available|offered|provided|supported)",
-   "not (?:eligible|available) for (?:visa |immigration )?sponsorship",
+   "sponsorship (?:is |will )?not (?:be )?(?:available|offered|provided|supported)",
+   "not (?:eligible|available) for (?:visa |immigration |employer |employment )?sponsorship",
+   "sponsorship available(?: for this (?:role|position|job))?(?: ?[?:-])? no",
    "must be a u\\.?s\\.? citizen",
    "u\\.?s\\.? citizen(?:ship)? (?:is )?(?:required|only)",
    "u\\.?s\\.? citizens only",

@@ -99,22 +99,36 @@ def load_profile(path):
 
 # ------------------------------------------------------------------ location
 def _segment_kind(seg, R):
-    without_states = R["us_states"].sub(" ", seg)  # "New Mexico" is not Mexico
-    if R["non_us_strong"].search(without_states):
+    # Explicit US evidence (US / USA, a state name, a US city) wins: "Toronto
+    # Canada, San Francisco, Remote in US" is open to US applicants. A foreign
+    # place name only overrides a bare two-letter code ("Toronto, CA").
+    if R["us_aliases"].search(seg) or R["us_states"].search(seg) or R["us_cities"].search(seg):
+        return "us"
+    if R["non_us_strong"].search(seg):
         return "non_us"
-    if (US_STATE_CODES.search(seg) or R["us_states"].search(seg)
-            or R["us_aliases"].search(seg) or R["us_cities"].search(seg)):
+    if US_STATE_CODES.search(seg):
         return "us"
     if R["non_us_weak"].search(seg):
         return "non_us"
     return "unknown"
 
 
+def _country_kind(country, prof):
+    """Structured country -> 'us' | 'non_us'. Handles ISO codes ('us', 'in')
+    and free text such as Ashby's 'US | EU'."""
+    c = country.strip()
+    if c.lower() in US_ALIASES:
+        return "us"
+    if len(c) == 2 and c.isalpha():
+        return "non_us"
+    kinds = [_segment_kind(s.strip(), prof["_re"]) for s in _SEGMENT_SPLIT.split(c) if s.strip()]
+    return "us" if "us" in kinds else "non_us"
+
+
 def classify_location(location, country, prof):
     """'us' | 'non_us' | 'ambiguous'. A structured country always wins."""
-    c = (country or "").strip().lower()
-    if c:
-        return "us" if c in US_ALIASES else "non_us"
+    if (country or "").strip():
+        return _country_kind(country, prof)
     text = _collapse(location)
     if not text:
         return "ambiguous"
@@ -178,7 +192,7 @@ def full_check(job, prof):
     """Uses fields set by enrich.enrich_job: country, description, yoe_min,
     sponsorship, sponsorship_phrase, applied_ai_hit."""
     country = (job.get("country") or "").strip()
-    if country and country.lower() not in US_ALIASES:
+    if country and _country_kind(country, prof) != "us":
         return Check(False, "location", country, ())
     yoe = job.get("yoe_min")
     if yoe is not None and yoe > prof["max_yoe"]:

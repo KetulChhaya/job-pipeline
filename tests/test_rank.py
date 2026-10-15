@@ -37,6 +37,8 @@ def test_full_check_sponsorship(prof):
 def test_full_check_structured_country_from_detail(prof):
     assert full_check(facts(country="Israel"), prof).reason == "location"
     assert full_check(facts(country="United States of America"), prof).keep
+    assert full_check(facts(country="US | EU"), prof).keep
+    assert full_check(facts(country="in"), prof).reason == "location"
 
 
 def test_ml_requires_applied_ai(prof):

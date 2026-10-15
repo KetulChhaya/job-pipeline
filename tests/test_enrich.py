@@ -27,6 +27,29 @@ from enrich import enrich_job, extract_sponsorship, extract_stack, init_cache, p
     ("H-1B transfers are supported.", "yes"),
     ("Candidates must be legally authorized to work in the United States.", "unknown"),
     ("We offer great benefits and remote work.", "unknown"),
+    # C2: negation separated from "sponsor" by adverbs / "be able to"
+    ("Unfortunately, we will not be able to sponsor visas for this role.", "no"),
+    ("We won't be able to sponsor employment visas.", "no"),
+    ("We aren't able to sponsor visas at this time.", "no"),
+    ("We are not currently able to sponsor visas.", "no"),
+    ("This team isn't able to sponsor H-1B visas.", "no"),
+    ("Visa Sponsorship Available: No", "no"),
+    ("Is visa sponsorship available for this role? No.", "no"),
+    ("We do not currently sponsor visas.", "no"),
+    ("We cannot currently sponsor.", "no"),
+    ("We do not offer H-1B sponsorship.", "no"),
+    ("We are not sponsoring visas.", "no"),
+    ("Sponsorship will not be provided.", "no"),
+    ("Must be authorized to work without employer sponsorship.", "no"),
+    ("Must be able to work without needing sponsorship.", "no"),
+    ("This role is not eligible for employer sponsorship.", "no"),
+    ("Visa Sponsorship Available: Yes", "yes"),
+    ("Whether or not you need sponsorship, we welcome all applicants.", "unknown"),
+    # C1: export-licence boilerplate is not a work-visa statement
+    ("This position may require access to information protected under U.S. export control laws. "
+     "Please note that any offer of employment may be conditioned on your authorization to receive "
+     "software or technology controlled under these U.S. export laws without sponsorship for an "
+     "export license.", "unknown"),
     ("", "unknown"),
 ])
 def test_extract_sponsorship(prof, text, status):
@@ -102,6 +125,32 @@ def test_enrich_title_counts_toward_stack(prof, con):
     j = enrich_job(_job(role="Sr Software Engineer (Python/Typescript)", detail_url="",
                         description="Build APIs."), prof, con=con)
     assert set(j["user_groups"]) == {"python", "typescript"}
+
+
+def test_cache_write_does_not_hold_the_db_lock(prof, tmp_path):
+    db = str(tmp_path / "seen.db")
+    a = sqlite3.connect(db)
+    init_cache(a)
+    a.commit()
+    other = sqlite3.connect(db, timeout=0.2)
+    other.execute("CREATE TABLE t(x)")
+    other.commit()
+
+    def fetch(job):
+        other.execute("INSERT INTO t VALUES (1)")  # a second writer mid-run (add_job)
+        other.commit()
+        return "3+ years of experience.", ""
+    enrich_job(_job(job_link="https://e/1"), prof, con=a, fetch=fetch)
+    enrich_job(_job(job_link="https://e/2"), prof, con=a, fetch=fetch)
+    assert other.execute("SELECT COUNT(*) FROM t").fetchone()[0] == 2
+
+
+def test_prune_cache_commits(tmp_path):
+    c = sqlite3.connect(str(tmp_path / "seen.db"))
+    init_cache(c)
+    c.commit()
+    prune_cache(c)
+    assert not c.in_transaction
 
 
 def test_prune_cache_drops_old_rows(con):

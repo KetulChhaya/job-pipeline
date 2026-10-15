@@ -183,7 +183,11 @@ def main():
     con = _db(args.db)
     init_cache(con)
     init_rejected(con)
-    prune_cache(con)
+    con.commit()
+    try:
+        prune_cache(con)
+    except sqlite3.Error as e:  # another run holds the lock; pruning can wait
+        print(f"WARN: desc_cache not pruned: {e}", file=sys.stderr)
     kept, rejected, skipped = run_filters(jobs, prof, con, args.agent)
     con.close()
 

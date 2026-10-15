@@ -19,6 +19,12 @@ from fetchers import html_to_text
     ("We were founded 10 years ago and serve 5 million users.", (None, None)),
     ("Strong experience with distributed systems.", (None, None)),
     ("", (None, None)),
+    ("Must have a Master's degree plus six (6) years of software development experience.", (6, None)),
+    ("Minimum of seven (7) years of experience.", (7, None)),
+    ("Have 6+ years of experience building production software, ideally full-stack.", (6, None)),
+    ("7+ years of professional experience, and experience with Kubernetes is a plus.", (7, None)),
+    ("3+ years of experience required, 6+ years preferred.", (3, None)),
+    ("8+ years of experience preferred.", (None, None)),
 ])
 def test_extract_yoe(text, expected):
     assert extract_yoe(text) == expected

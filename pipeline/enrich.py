@@ -2,6 +2,7 @@
 YOE, stack terms and sponsorship wording. No keep/drop decisions here.
 """
 import re
+import sqlite3
 import time
 from datetime import datetime, timedelta
 
@@ -17,7 +18,7 @@ _WORDS = {w: i for i, w in enumerate(
     "zero one two three four five six seven eight nine ten eleven twelve "
     "thirteen fourteen fifteen".split())}
 _NUM = (r"(?<![A-Za-z0-9])(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|"
-        r"ten|eleven|twelve|thirteen|fourteen|fifteen)")
+        r"ten|eleven|twelve|thirteen|fourteen|fifteen)(?:\s*\(\s*\d{1,2}\s*\))?")  # "six (6)"
 _Y = r"(?:years?|yrs?)(?![\s-]*(?:degree|college|university|program))"
 _YOE_PATTERNS = [  # order matters: earlier matches are blanked out
     (re.compile(rf"{_NUM}\s*\+?\s*(?:-|–|—|to)\s*{_NUM}\s*\+?\s*{_Y}", re.I), True),
@@ -26,7 +27,6 @@ _YOE_PATTERNS = [  # order matters: earlier matches are blanked out
     (re.compile(rf"{_NUM}\s*(?:or more|plus)\s*{_Y}", re.I), False),
     (re.compile(rf"{_NUM}\s*{_Y}", re.I), False),
 ]
-_ANY_YEARS = re.compile(rf"\d\s*\+?\s*{_Y}", re.I)
 _PREF_HEAD = re.compile(r"\b(?:preferred|nice[ -]to[ -]haves?|bonus|desired|pluses)\b", re.I)
 _REQ_HEAD = re.compile(
     r"\b(?:minimum|basic|required|requirements|qualifications|what you(?:'ll)? (?:need|bring)|"
@@ -34,6 +34,7 @@ _REQ_HEAD = re.compile(
 _SKIP = re.compile(r"\b(?:preferred|bonus|nice[ -]to[ -]have|a plus|ideally|desired)\b", re.I)
 _EXPERIENCE = re.compile(r"experience", re.I)
 _SENTENCE = re.compile(r"(?<=[.!?;])\s+")
+_CLAUSE = re.compile(r"[,;]|\s[–—-]\s")
 
 
 def _num(s):
@@ -42,14 +43,15 @@ def _num(s):
 
 
 def _requirement_sentences(text):
-    """Sentences that state a requirement: mention experience, not under a
-    'Preferred' heading, and not themselves marked preferred/bonus."""
+    """Clauses that state a requirement: their sentence mentions experience,
+    they are not under a 'Preferred' heading, and the clause itself is not
+    marked preferred/bonus ("6+ years ..., ideally full-stack" keeps the 6+)."""
     mode = "req"
     for raw in (text or "").replace("’", "'").splitlines():
         line = " ".join(raw.split())
         if not line:
             continue
-        if len(line) <= 60 and not _ANY_YEARS.search(line):
+        if len(line) <= 60 and not any(rx.search(line) for rx, _ in _YOE_PATTERNS):
             if _PREF_HEAD.search(line):
                 mode = "pref"
                 continue
@@ -59,8 +61,11 @@ def _requirement_sentences(text):
         if mode == "pref":
             continue
         for sent in _SENTENCE.split(line):
-            if _EXPERIENCE.search(sent) and not _SKIP.search(sent):
-                yield sent
+            if not _EXPERIENCE.search(sent):
+                continue
+            for clause in _CLAUSE.split(sent):
+                if not _SKIP.search(clause):
+                    yield clause
 
 
 def extract_yoe(text):
@@ -117,6 +122,7 @@ def init_cache(con):
 def prune_cache(con, days=3):
     cutoff = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
     con.execute("DELETE FROM desc_cache WHERE fetched_at < ?", (cutoff,))
+    con.commit()
 
 
 def fetch_detail(job):
@@ -159,8 +165,12 @@ def enrich_job(job, prof, con=None, fetch=fetch_detail):
             except Exception:
                 text, country = "", ""
             if text and con is not None:
-                con.execute("INSERT OR REPLACE INTO desc_cache VALUES (?,?,?,?)",
-                            (key, text, country, datetime.now().isoformat(timespec="seconds")))
+                try:  # commit at once: other writers (add_job) must not wait on network I/O
+                    con.execute("INSERT OR REPLACE INTO desc_cache VALUES (?,?,?,?)",
+                                (key, text, country, datetime.now().isoformat(timespec="seconds")))
+                    con.commit()
+                except sqlite3.Error:
+                    pass  # the cache is an optimization; never fail a job over it
         if country and not job.get("country"):
             job["country"] = country
     job["description"] = text
