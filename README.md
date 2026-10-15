@@ -48,10 +48,10 @@ Never commit `service-account.json` anywhere.
 ```bash
 # Offline: fetchers + dedup logic, no sheet writes
 python3 pipeline/discover.py --agent test --sources greenhouse,ashby
-python3 pipeline/add_job.py --agent test --input candidates_test_*.json --dry-run
+python3 pipeline/add_job.py --agent test --input runs/candidates_test_*.json --dry-run
 
 # Live: appends to the real sheet (creates "Pipeline Jobs" + "Pipeline Runs" tabs)
-python3 pipeline/add_job.py --agent test --input candidates_test_*.json
+python3 pipeline/add_job.py --agent test --input runs/candidates_test_*.json
 ```
 
 ### 4. Schedule it
@@ -97,4 +97,4 @@ Then do one manual run of each to confirm end-to-end:
 - Glassdoor is anti-bot; not worth a lane.
 - Location filter: US states + "remote", but "São Paulo, Remote"-style
   non-US-remote postings are excluded.
-- Role filter: `config/boards.json` `title_keywords` — edit freely.
+- Filters: `config/profile.json` (role, level, YOE, sponsorship, location, stack score, per-company cap). Agents must not edit it. Spec: `docs/superpowers/specs/2026-10-15-job-filters-design.md`.

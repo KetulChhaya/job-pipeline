@@ -17,16 +17,25 @@ go straight to step 1.
 
 1. **Discover.** Run:
    `python3 pipeline/discover.py --agent gemini --sources workday,smartrecruiters`
-   This fetches postings from the last 30 hours (the 6h overlap is intentional;
-   dedup handles it), filters to SWE-role titles in the US / US-remote, and writes
-   `candidates_gemini_<timestamp>.json`. It prints a JSON summary including
-   `dead_boards` and `errors`.
+   This verifies every board token, fetches postings from the last 30 hours
+   (the 6h overlap is intentional; dedup handles it), applies the candidate
+   profile in `config/profile.json` (role, level, YOE, sponsorship, US only,
+   max 3 per company per day), and writes `runs/candidates_gemini_<timestamp>.json`
+   (kept, best score first) and `runs/rejected_gemini_<timestamp>.json`.
+   It prints a JSON summary including `dropped`, `dead_boards` and `errors`.
 
 2. **Spot-check.** Open the candidates file and sanity-check 2-3 entries:
-   dates within the window, titles actually engineering, locations US-ish.
+   dates within the window, roles fit the profile, locations in the US, Notes
+   show a score. Then read 3 random entries in the rejected file. If a job that
+   clearly fits was dropped, or a misfit was kept, report its title, location
+   and reason. Do NOT edit `config/profile.json`, `pipeline/filters.py` or
+   `pipeline/enrich.py`; the human tunes those.
+   If an API changed shape and a fetcher is mis-parsing, fix
+   `pipeline/fetchers.py` minimally and re-run discovery for the affected
+   source. Note the fix in your final report.
 
 3. **Append — through the gate, never directly.**
-   `python3 pipeline/add_job.py --agent gemini --input candidates_gemini_<timestamp>.json`
+   `python3 pipeline/add_job.py --agent gemini --input runs/candidates_gemini_<timestamp>.json`
    `add_job.py` is the ONLY thing allowed to write to the sheet. It dedupes
    against both job tabs and a local registry, appends only genuinely new jobs
    to the "Pipeline Jobs" tab, and logs the run to "Pipeline Runs". Never call
@@ -53,8 +62,10 @@ go straight to step 1.
 - If an API shape changed and a fetcher mis-parses, fix `pipeline/fetchers.py`
   minimally, re-run discovery for that source, and note the fix.
 - Keep your token spend lean: reuse the fetchers, don't re-derive what they do.
+- Never edit `config/profile.json`, `pipeline/filters.py` or `pipeline/enrich.py`.
 
 ## Report
 
-End every run with a short report: fetched / appended / dupes / errors,
-dead tenants, any fetcher fixes, any new tenants added.
+End every run with a short report: fetched / kept / appended / dupes /
+dropped by reason / errors, dead tenants, any fetcher fixes, any new tenants
+added, and any filter mistakes you spotted in step 2.
