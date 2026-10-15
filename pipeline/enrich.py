@@ -79,3 +79,99 @@ def extract_yoe(text):
                     best = (lo, hi)
             work = rx.sub(lambda m: " " * len(m.group(0)), work)
     return best if best else (None, None)
+
+
+# ---------------------------------------------------------- sponsorship/stack
+def extract_sponsorship(text, prof):
+    """('clearance' | 'no' | 'yes' | 'unknown', matched phrase)."""
+    t = " ".join((text or "").replace("’", "'").split())
+    R = prof["_re"]
+    for status, rx in (("clearance", R["clearance"]), ("no", R["sponsor_neg"]),
+                       ("yes", R["sponsor_pos"])):
+        m = rx.search(t)
+        if m:
+            return status, m.group(0)
+    return "unknown", ""
+
+
+def matched_groups(text, groups):
+    """Names of the compiled groups that occur in text, in profile order."""
+    t = " ".join((text or "").split())
+    return [name for name, rx in groups.items() if rx.search(t)]
+
+
+def extract_stack(text, prof, limit=6):
+    """Dictionary terms found in text, the user's own stack first."""
+    t = " ".join((text or "").split())
+    found = [name for name, rx in prof["_re"]["dictionary"] if rx.search(t)]
+    user = set(prof["stack"]["user_terms"])
+    return ([n for n in found if n in user] + [n for n in found if n not in user])[:limit]
+
+
+# ------------------------------------------------------------- descriptions
+def init_cache(con):
+    con.execute("""CREATE TABLE IF NOT EXISTS desc_cache(
+        url_key TEXT PRIMARY KEY, description TEXT, country TEXT, fetched_at TEXT)""")
+
+
+def prune_cache(con, days=3):
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+    con.execute("DELETE FROM desc_cache WHERE fetched_at < ?", (cutoff,))
+
+
+def fetch_detail(job):
+    """(description, country) from the job's detail_url. Raises on HTTP errors."""
+    r = requests.get(job["detail_url"], headers=UA, timeout=TIMEOUT)
+    r.raise_for_status()
+    d = r.json()
+    time.sleep(DETAIL_SLEEP)
+    if job.get("ats") == "smartrecruiters":
+        sections = (d.get("jobAd") or {}).get("sections") or {}
+        parts = []
+        for key in ("jobDescription", "qualifications", "additionalInformation"):
+            s = sections.get(key) or {}
+            parts.append((s.get("title") or "") + "\n" + html_to_text(s.get("text") or ""))
+        return "\n".join(parts).strip(), ""
+    if job.get("ats") == "workday":
+        info = d.get("jobPostingInfo") or {}
+        return (html_to_text(info.get("jobDescription") or ""),
+                (info.get("country") or {}).get("descriptor") or "")
+    return "", ""
+
+
+def enrich_job(job, prof, con=None, fetch=fetch_detail):
+    """Fill description-derived fields in place and return the job.
+    Sets: description, country (if learned), yoe_min, yoe_max, sponsorship,
+    sponsorship_phrase, user_groups, ai_groups, stack_terms, applied_ai_hit.
+    Appends 'desc ?' to job['tags'] when no description could be had."""
+    text = job.get("description") or ""
+    if not text and job.get("detail_url"):
+        key = normalize_url(job["job_link"])
+        row = None
+        if con is not None:
+            row = con.execute("SELECT description, country FROM desc_cache WHERE url_key=?",
+                              (key,)).fetchone()
+        if row:
+            text, country = row
+        else:
+            try:
+                text, country = fetch(job)
+            except Exception:
+                text, country = "", ""
+            if text and con is not None:
+                con.execute("INSERT OR REPLACE INTO desc_cache VALUES (?,?,?,?)",
+                            (key, text, country, datetime.now().isoformat(timespec="seconds")))
+        if country and not job.get("country"):
+            job["country"] = country
+    job["description"] = text
+    if not text:
+        job.setdefault("tags", []).append("desc ?")
+    both = f"{job.get('role', '')}\n{text}"
+    R = prof["_re"]
+    job["yoe_min"], job["yoe_max"] = extract_yoe(text)
+    job["sponsorship"], job["sponsorship_phrase"] = extract_sponsorship(text, prof)
+    job["user_groups"] = matched_groups(both, R["user_groups"])
+    job["ai_groups"] = matched_groups(both, R["ai_groups"])
+    job["stack_terms"] = extract_stack(both, prof)
+    job["applied_ai_hit"] = bool(R["ml_requires_any"].search(" ".join(text.split())))
+    return job
