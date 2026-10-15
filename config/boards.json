@@ -50,7 +50,10 @@
   "Intuitive",
   "Mirantis",
   "WesternDigital",
-  "BoschGroup"
+  "BoschGroup",
+  "LinkedIn3",
+  "Freshworks",
+  "Canva"
  ],
  "workday": [
   {
@@ -92,6 +95,22 @@
   {
    "base_url": "https://mastercard.wd1.myworkdayjobs.com",
    "board_path": "mastercard/CorporateCareers"
+  },
+  {
+   "base_url": "https://cisco.wd5.myworkdayjobs.com",
+   "board_path": "cisco/Cisco_Careers"
+  },
+  {
+   "base_url": "https://adobe.wd5.myworkdayjobs.com",
+   "board_path": "adobe/external_experienced"
+  },
+  {
+   "base_url": "https://sonos.wd1.myworkdayjobs.com",
+   "board_path": "sonos/sonos"
+  },
+  {
+   "base_url": "https://micron.wd1.myworkdayjobs.com",
+   "board_path": "micron/External"
   }
  ]
 }
