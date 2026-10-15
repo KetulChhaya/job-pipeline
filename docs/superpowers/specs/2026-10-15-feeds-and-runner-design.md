@@ -8,13 +8,13 @@ Builds on: `2026-10-15-job-filters-design.md` (filters, enrichment, `add_job` ga
 
 1. Add three GitHub-hosted job lists as a source, run deterministically
    (no LLM), through the same filters and dedup gate as the board lanes.
-2. One command, `jobs`, runs every lane from any folder. It shows compact
+2. One command, `jobhunt`, runs every lane from any folder. It shows compact
    live progress, then a summary of what was appended, the agent reports,
    the log path, and a macOS notification. Nobody has to open the project.
 
 ## Success criteria
 
-1. `jobs` runs Claude lane → Gemini lane → feeds step, and prints a total
+1. `jobhunt` runs Claude lane → Gemini lane → feeds step, and prints a total
    line ("N jobs added (claude a, gemini b, feeds c)").
 2. While a lane runs, the terminal shows a progress line per board/feed,
    a filter line (kept / dropped by reason), and an append line, all
@@ -32,7 +32,7 @@ Builds on: `2026-10-15-job-filters-design.md` (filters, enrichment, `add_job` ga
 
 - Hourly cron, a lock around add_job, registry-before-append (spec 2).
 - Board-slug harvesting from these feeds (spec 3).
-- Workable / iCIMS / jobright description fetching (those links stay `desc ?`).
+- Workable / iCIMS description fetching (those links stay `desc ?`).
 
 ## Feeds
 
@@ -72,6 +72,7 @@ Each feed row becomes the normal job dict (`source: github/<name>`), plus
 | ashby | `jobs.ashbyhq.com/<slug>/<uuid>` | board list `api.ashbyhq.com/posting-api/job-board/<slug>`, fetched once per slug per run, then matched by id |
 | workday | `<tenant>.wdN.myworkdayjobs.com/[<locale>/]<board>/job/...` | `.../wday/cxs/<tenant>/<board>/job/...` (existing Workday detail parser) |
 | smartrecruiters | `jobs.smartrecruiters.com/<company>/<id>` | existing SmartRecruiters detail parser |
+| jobright | `jobright.ai/jobs/info/<id>` | the page's schema.org `JobPosting` JSON-LD → description + `jobLocation` country; `isH1bSponsor: true` becomes `sponsor ✓` when the description is silent |
 
 ### Filter changes
 
@@ -148,7 +149,7 @@ summary; default `pipeline/seen.db`) and, with `--direct` only, `--dry-run`
   View: less +G /Users/…/logs/claude-20261015-1017.log
 ```
 
-  - Appended rows: `seen` rows for this agent with `first_seen` ≥ lane
+  - Appended rows (top 25 by score, then `… N more`): `seen` rows for this agent with `first_seen` ≥ lane
     start; score / YOE joined from this lane's `runs/candidates_*.json`.
   - Errors shown only when present: non-zero exit, `!` progress lines.
   - Writes `logs/last-run-<agent>.json` (`added`, `jobs`, `exit`, `seconds`).
@@ -168,8 +169,8 @@ summary; default `pipeline/seen.db`) and, with `--direct` only, `--dry-run`
 - `run_all.sh` (new): sets `JOB_NOTIFY=0` and `JOB_RUN_STARTED`, runs the
   three scripts (a failing lane doesn't stop the next), then `runner.py
   --total`.
-- `~/.zshrc`: `alias jobs="$HOME/Work/job-pipeline/run_all.sh"` (added once,
-  only if absent).
+- `~/.zshrc`: `alias jobhunt="$HOME/Work/job-pipeline/run_all.sh"` (added once,
+  only if absent). Not `jobs`: that is a zsh builtin (lists background tasks).
 
 ## Error handling
 
@@ -203,3 +204,14 @@ summary; default `pipeline/seen.db`) and, with `--direct` only, `--dry-run`
 - End-to-end: `run_feeds.sh` against a copy of `seen.db` with add_job in
   dry-run mode (`runner.py --agent feeds --direct github --db <copy> --dry-run`), output shown to the user before
   the first real `jobs`.
+
+## Revisions after the live prototype run (2026-10-15 11:07)
+
+- jobright pages carry the full description, a structured country and the
+  company's H-1B history, so jobright links are fetched like an ATS. In the
+  dry run that raised sponsorship drops from 3 to 33.
+- speedyapply's "Other" table has no Salary column: rows have 5 or 6 cells.
+- More citizenship/clearance wording: "citizenship is a requirement",
+  "requires U.S. citizenship", "obtain ... clearance".
+- The end-of-lane table shows the top 25 rows; the rest are in the sheet.
+- Alias renamed `jobhunt` (see Scripts).
