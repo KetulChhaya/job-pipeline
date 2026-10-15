@@ -1,7 +1,11 @@
 """ATS job-board fetchers. Every function returns a list of normalized job dicts:
 
-    {"date_posted", "company", "role", "location", "yoe",
-     "job_link", "stack", "notes"}
+    {"date_posted", "company", "role", "location", "yoe", "job_link", "stack",
+     "notes", "source", "extra_note", "ats", "job_id", "country",
+     "description", "detail_url"}
+
+Fetchers only apply the freshness window. Role / location / YOE filtering
+lives in filters.py, driven by config/profile.json.
 
 All public, unauthenticated JSON APIs. Polite: small sleep between boards.
 Run verify_board(source, key) before adding any new board token.
@@ -17,25 +21,6 @@ import requests
 UA = {"User-Agent": "job-pipeline/1.0 (personal job search; contact in repo README)"}
 TIMEOUT = 25
 SLEEP_BETWEEN_BOARDS = 2
-
-US_STATES = [
-    "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
-    "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho",
-    "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana",
-    "maine", "maryland", "massachusetts", "michigan", "minnesota",
-    "mississippi", "missouri", "montana", "nebraska", "nevada",
-    "new hampshire", "new jersey", "new mexico", "new york",
-    "north carolina", "north dakota", "ohio", "oklahoma", "oregon",
-    "pennsylvania", "rhode island", "south carolina", "south dakota",
-    "tennessee", "texas", "utah", "vermont", "virginia", "washington",
-    "west virginia", "wisconsin", "wyoming", "district of columbia",
-    "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi",
-    "id", "il", "in", "ia", "ks", "ky", "la", "me", "md", "ma", "mi",
-    "mn", "ms", "mo", "mt", "ne", "nv", "nh", "nj", "nm", "ny", "nc",
-    "nd", "oh", "ok", "or", "pa", "ri", "sc", "sd", "tn", "tx", "ut",
-    "vt", "va", "wa", "wv", "wi", "wy", "dc",
-]
-
 
 def load_config(path="config/boards.json"):
     with open(path) as f:
@@ -90,38 +75,8 @@ def html_to_text(s):
     return "\n".join(line.strip() for line in s.split("\n") if line.strip())
 
 
-def matches_role(title, keywords):
-    t = (title or "").lower()
-    return any(k in t for k in keywords)
-
-
-NON_US = [
-    "brazil", "brasil", "são paulo", "sao paulo", "canada", "toronto",
-    "mexico", "india", "bangalore", "bengaluru", "hyderabad", "united kingdom",
-    "uk", "london", "ireland", "dublin", "germany", "berlin", "france",
-    "paris", "spain", "madrid", "netherlands", "amsterdam", "poland",
-    "warsaw", "singapore", "japan", "tokyo", "australia", "sydney",
-    "latam", "emea", "apac",
-]
-
-
-def _has_us(loc):
-    return any(re.search(r"\b" + re.escape(st) + r"\b", loc) for st in US_STATES)
-
-
-def matches_location(loc, keywords):
-    loc = (loc or "").lower()
-    if not loc:
-        return False
-    if any(re.search(r"\b" + re.escape(c) + r"\b", loc) for c in NON_US):
-        # "São Paulo, Remote" is not a US job; "San Francisco, Remote" is.
-        return _has_us(loc)
-    if any(k in loc for k in keywords):
-        return True
-    return _has_us(loc)
-
-
-def _norm(date_posted, company, role, location, job_link, source, extra_note=""):
+def _norm(date_posted, company, role, location, job_link, source, extra_note="",
+          *, ats="", job_id="", country="", description="", detail_url=""):
     notes = f"source: {source}"
     if extra_note:
         notes += f"; {extra_note}"
@@ -134,6 +89,13 @@ def _norm(date_posted, company, role, location, job_link, source, extra_note="")
         "job_link": job_link or "",
         "stack": "",
         "notes": notes,
+        "source": source,
+        "extra_note": extra_note,
+        "ats": ats,
+        "job_id": str(job_id or ""),
+        "country": country or "",
+        "description": description or "",
+        "detail_url": detail_url or "",
     }
 
 
@@ -144,13 +106,10 @@ def _fresh(dt, hours):
 
 
 # ---------------------------------------------------------------- greenhouse
-def fetch_greenhouse(board, hours=30, cfg=None):
-    cfg = cfg or {}
-    tk, lk = cfg.get("title_keywords", []), cfg.get("location_keywords", [])
+def fetch_greenhouse(board, hours=30):
     r = requests.get(f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs",
-                     headers=UA, timeout=TIMEOUT)
+                     params={"content": "true"}, headers=UA, timeout=TIMEOUT)
     r.raise_for_status()
-    cutoff_note = []
     out = []
     for j in r.json().get("jobs", []):
         pub_raw = j.get("first_published")
@@ -163,8 +122,6 @@ def fetch_greenhouse(board, hours=30, cfg=None):
             continue
         title = j.get("title", "")
         loc = (j.get("location") or {}).get("name", "")
-        if not matches_role(title, tk) or not matches_location(loc, lk):
-            continue
         out.append(_norm(
             dt.strftime("%Y-%m-%d"),
             j.get("company_name") or board,
@@ -172,15 +129,24 @@ def fetch_greenhouse(board, hours=30, cfg=None):
             j.get("absolute_url", ""),
             f"greenhouse/{board}",
             "" if verified else "date=updated_at, spot-check",
+            ats="greenhouse", job_id=j.get("id"),
+            description=html_to_text(j.get("content") or ""),
         ))
     time.sleep(SLEEP_BETWEEN_BOARDS)
     return out
 
 
 # --------------------------------------------------------------------- lever
-def fetch_lever(company, hours=30, cfg=None):
-    cfg = cfg or {}
-    tk, lk = cfg.get("title_keywords", []), cfg.get("location_keywords", [])
+def _lever_text(j):
+    parts = [j.get("descriptionPlain") or ""]
+    for block in j.get("lists") or []:
+        parts.append(block.get("text") or "")
+        parts.append(html_to_text(block.get("content") or ""))
+    parts.append(j.get("additionalPlain") or "")
+    return "\n".join(p for p in parts if p).strip()
+
+
+def fetch_lever(company, hours=30):
     r = requests.get(f"https://api.lever.co/v0/postings/{company}",
                      params={"mode": "json"}, headers=UA, timeout=TIMEOUT)
     r.raise_for_status()
@@ -195,22 +161,20 @@ def fetch_lever(company, hours=30, cfg=None):
         cats = j.get("categories") or {}
         title = j.get("text", "")
         loc = cats.get("location", "")
-        if not matches_role(title, tk) or not matches_location(loc, lk):
-            continue
         out.append(_norm(
             dt.strftime("%Y-%m-%d"),
             company, title, loc,
             j.get("hostedUrl") or j.get("applyUrl", ""),
             f"lever/{company}",
+            ats="lever", job_id=j.get("id"), country=j.get("country") or "",
+            description=_lever_text(j),
         ))
     time.sleep(SLEEP_BETWEEN_BOARDS)
     return out
 
 
 # --------------------------------------------------------------------- ashby
-def fetch_ashby(board, hours=30, cfg=None):
-    cfg = cfg or {}
-    tk, lk = cfg.get("title_keywords", []), cfg.get("location_keywords", [])
+def fetch_ashby(board, hours=30):
     r = requests.get(f"https://api.ashbyhq.com/posting-api/job-board/{board}",
                      headers=UA, timeout=TIMEOUT)
     r.raise_for_status()
@@ -225,22 +189,21 @@ def fetch_ashby(board, hours=30, cfg=None):
         loc = j.get("location") or ""
         if j.get("isRemote"):
             loc = (loc + ", Remote").strip(", ")
-        if not matches_role(title, tk) or not matches_location(loc, lk):
-            continue
         out.append(_norm(
             dt.strftime("%Y-%m-%d"),
             board, title, loc,
             j.get("jobUrl", ""),
             f"ashby/{board}",
+            ats="ashby", job_id=j.get("id"),
+            country=((j.get("address") or {}).get("postalAddress") or {}).get("addressCountry") or "",
+            description=j.get("descriptionPlain") or "",
         ))
     time.sleep(SLEEP_BETWEEN_BOARDS)
     return out
 
 
 # ------------------------------------------------------- smartrecruiters
-def fetch_smartrecruiters(company_id, hours=30, cfg=None):
-    cfg = cfg or {}
-    tk, lk = cfg.get("title_keywords", []), cfg.get("location_keywords", [])
+def fetch_smartrecruiters(company_id, hours=30):
     out, offset, limit = [], 0, 100
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     while True:
@@ -260,19 +223,19 @@ def fetch_smartrecruiters(company_id, hours=30, cfg=None):
                     return out
                 continue
             loc = j.get("location") or {}
-            country = (loc.get("country") or "").lower()
-            if country and country != "us":
-                continue
             loc_s = ", ".join(x for x in
                               [loc.get("city"), loc.get("region"), loc.get("country")]
                               if x)
             title = j.get("name", "")
-            if not matches_role(title, tk) or not matches_location(loc_s, lk):
-                continue
             link = (j.get("applyUrl")
                     or f"https://jobs.smartrecruiters.com/{company_id}/{j.get('id', '')}")
-            out.append(_norm(dt.strftime("%Y-%m-%d"), company_id, title, loc_s,
-                             link, f"smartrecruiters/{company_id}"))
+            out.append(_norm(
+                dt.strftime("%Y-%m-%d"), company_id, title, loc_s,
+                link, f"smartrecruiters/{company_id}",
+                ats="smartrecruiters", job_id=j.get("id"), country=loc.get("country") or "",
+                detail_url=("https://api.smartrecruiters.com/v1/companies/"
+                            f"{company_id}/postings/{j.get('id', '')}"),
+            ))
         if len(items) < limit:
             break
         offset += limit
@@ -281,11 +244,9 @@ def fetch_smartrecruiters(company_id, hours=30, cfg=None):
 
 
 # ------------------------------------------------------------------- workday
-def fetch_workday(base_url, board_path, hours=30, cfg=None, limit=20):
+def fetch_workday(base_url, board_path, hours=30, limit=20):
     """base_url like https://nvidia.wd5.myworkdayjobs.com ; board_path like
     nvidia/NVIDIAExternalCareerSite. Endpoint shapes vary per tenant: verify first."""
-    cfg = cfg or {}
-    tk, lk = cfg.get("title_keywords", []), cfg.get("location_keywords", [])
     cxs_path = board_path.strip("/") if "/" in board_path else f"{board_path}/{board_path}"
     board_name = board_path.strip("/").split("/")[-1]
     company = board_path.strip("/").split("/")[0]
@@ -314,11 +275,13 @@ def fetch_workday(base_url, board_path, hours=30, cfg=None, limit=20):
                     loc = f"{primary_loc} ({loc})" if loc else primary_loc
                 elif primary_loc.lower() not in loc.lower():
                     loc = f"{loc}, {primary_loc}"
-            if not matches_role(title, tk) or not matches_location(loc, lk):
-                continue
             link = f"{base_url.rstrip('/')}/{board_name}{j.get('externalPath', '')}"
-            out.append(_norm(dt.strftime("%Y-%m-%d"), company, title, loc,
-                             link, f"workday/{board_path}"))
+            out.append(_norm(
+                dt.strftime("%Y-%m-%d"), company, title, loc,
+                link, f"workday/{board_path}",
+                ats="workday", job_id=j.get("externalPath", ""),
+                detail_url=f"{base_url.rstrip('/')}/wday/cxs/{cxs_path}{j.get('externalPath', '')}",
+            ))
         if len(items) < limit or offset >= 200:
             break
         offset += limit
