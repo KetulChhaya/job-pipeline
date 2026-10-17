@@ -29,11 +29,14 @@ from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from progress import init as progress_init, progress  # noqa: E402
+import settings  # noqa: E402
 
-SPREADSHEET_ID = os.environ.get("JOB_SHEET_ID", "1K4qWzt0ew0Dz4_PVn5iKKn3uf896Mhwzoi9uRqAJVoY")
-JOBS_TAB = "Pipeline Jobs"
-RUNS_TAB = "Pipeline Runs"
-LINKEDIN_TAB = "LinkedIn Easy Apply"
+SETTINGS = settings.load()
+SPREADSHEET_ID = SETTINGS["sheet"]["id"]
+JOBS_TAB = SETTINGS["sheet"]["jobs_tab"]
+RUNS_TAB = SETTINGS["sheet"]["runs_tab"]
+# every tab whose rows count as "already in the sheet" for dedup
+DEDUP_TABS = [JOBS_TAB] + [t for t in SETTINGS["sheet"]["dedup_tabs"] if t != JOBS_TAB]
 HEADER = ["Date posted", "Company", "Role", "Location", "YOE",
           "Job link", "Stack summary", "Notes", "Status"]
 RUNS_HEADER = ["Timestamp", "Agent", "Sources", "Fetched",
@@ -115,7 +118,7 @@ def dropped_summary(input_path):
 def load_seen_from_sheet(sh):
     """(seen_urls, seen_content) from both job tabs."""
     seen_urls, seen_content = set(), set()
-    for tab in (JOBS_TAB, LINKEDIN_TAB):
+    for tab in DEDUP_TABS:
         try:
             ws = sh.worksheet(tab)
         except Exception:
@@ -145,11 +148,37 @@ def _db(db_path=None):
     return con
 
 
+def _open_sheet(sa_path):
+    if not SPREADSHEET_ID:
+        sys.exit("ERROR: no sheet configured: set sheet.id in config/settings.json "
+                 "(or run ./setup.sh)")
+    if not os.path.exists(sa_path):
+        sys.exit(f"ERROR: service account key not found: {sa_path}\n"
+                 "Set service_account in config/settings.json, GOOGLE_SERVICE_ACCOUNT, "
+                 "or run ./setup.sh.")
+    return _client(sa_path).open_by_key(SPREADSHEET_ID)
+
+
+def check(sa_path):
+    """Read-only setup check: can this key open the configured sheet?"""
+    sh = _open_sheet(sa_path)
+    with open(sa_path) as f:
+        email = json.load(f).get("client_email", "?")
+    tabs = [ws.title for ws in sh.worksheets()]
+    print(f"OK  sheet: {sh.title}\n    tabs: {', '.join(tabs)}\n    service account: {email}")
+    missing = [t for t in [JOBS_TAB, RUNS_TAB] if t not in tabs]
+    if missing:
+        print(f"    (created on the first real run: {', '.join(missing)})")
+    return 0
+
+
 # ---------------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--agent", required=True)
-    ap.add_argument("--input", required=True, help="candidates JSON from discover.py")
+    ap.add_argument("--input", help="candidates JSON from discover.py")
+    ap.add_argument("--check", action="store_true",
+                    help="read-only: open the sheet, list its tabs, print the service-account email")
     ap.add_argument("--dry-run", action="store_true",
                     help="fully non-mutating: in-memory registry, no sheet writes")
     ap.add_argument("--db", default=None, help="override SQLite registry path (testing)")
@@ -158,24 +187,22 @@ def main():
     ap.add_argument("--service-account", default=None)
     args = ap.parse_args()
     progress_init(args.agent)
+    sa_path = args.service_account or SETTINGS["service_account"]
+    if args.check:
+        return check(sa_path)
+    if not args.input:
+        ap.error("--input is required (or use --check)")
 
     with open(args.input) as f:
         candidates = json.load(f)
     # best first; older candidate files have no score and keep their order
     candidates.sort(key=lambda c: -(c.get("score") or 0))
 
-    sa_path = (args.service_account
-               or os.environ.get("GOOGLE_SERVICE_ACCOUNT")
-               or os.path.join(ROOT, "service-account.json"))
-
     seen_urls, seen_content = set(), set()
     sh = None
     use_sheet = not (args.dry_run or args.skip_sheet)
     if use_sheet:
-        if not os.path.exists(sa_path):
-            sys.exit(f"ERROR: service account key not found: {sa_path}\n"
-                     f"Set GOOGLE_SERVICE_ACCOUNT or see README.md step 2.")
-        sh = _client(sa_path).open_by_key(SPREADSHEET_ID)
+        sh = _open_sheet(sa_path)
         _ensure_tab(sh, JOBS_TAB, HEADER)
         seen_urls, seen_content = load_seen_from_sheet(sh)
 
@@ -249,4 +276,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -53,7 +53,8 @@
   "BoschGroup",
   "LinkedIn3",
   "Freshworks",
-  "Canva"
+  "Canva",
+  "AristaNetworks"
  ],
  "workday": [
   {
@@ -111,6 +112,14 @@
   {
    "base_url": "https://micron.wd1.myworkdayjobs.com",
    "board_path": "micron/External"
+  },
+  {
+   "base_url": "https://capitalone.wd12.myworkdayjobs.com",
+   "board_path": "capitalone/Capital_One"
+  },
+  {
+   "base_url": "https://ebay.wd5.myworkdayjobs.com",
+   "board_path": "ebay/apply"
   }
  ],
  "github": [

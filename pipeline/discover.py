@@ -28,7 +28,10 @@ from filters import (cap, company_key, full_check, load_profile,  # noqa: E402
 from progress import init as progress_init, progress  # noqa: E402
 
 SOURCES = dict(FETCHERS, github=fetch_feed)
-RECENT_TITLE_DAYS = 3
+import settings  # noqa: E402
+
+RECENT_TITLE_DAYS = settings.load()["fetch"]["recent_title_days"]
+DEFAULT_HOURS = settings.load()["fetch"]["hours"]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -201,7 +204,7 @@ def main():
     ap.add_argument("--agent", required=True)
     ap.add_argument("--sources", required=True,
                     help="comma-separated: greenhouse,lever,ashby,smartrecruiters,workday,github")
-    ap.add_argument("--hours", type=int, default=30,
+    ap.add_argument("--hours", type=int, default=DEFAULT_HOURS,
                     help="lookback window; 30h gives overlap between 6h runs (dedup handles it)")
     ap.add_argument("--config", default=os.path.join(ROOT, "config", "boards.json"))
     ap.add_argument("--profile", default=os.path.join(ROOT, "config", "profile.json"))
@@ -212,9 +215,10 @@ def main():
 
     try:
         prof = load_profile(args.profile)
-    except ValueError as e:
-        sys.exit(f"ERROR: {e}")
-    cfg = load_config(args.config)
+        cfg = load_config(args.config)
+    except (ValueError, OSError) as e:
+        sys.exit(f"ERROR: {e}\nCopy config/profile.example.json and config/boards.example.json "
+                 "(without .example), or run ./setup.sh.")
     sources = [s.strip() for s in args.sources.split(",") if s.strip()]
 
     jobs, dead, errors = fetch_all(cfg, sources, args.hours)

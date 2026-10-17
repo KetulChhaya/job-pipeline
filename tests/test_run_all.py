@@ -17,6 +17,7 @@ def home(tmp_path):
         p.chmod(0o755)
     (tmp_path / "pipeline").mkdir()
     (tmp_path / "pipeline" / "runner.py").write_text("import sys; print('total', *sys.argv[1:])\n")
+    shutil.copy(os.path.join(ROOT, "pipeline", "settings.py"), tmp_path / "pipeline")
     (tmp_path / "pipeline" / "seen.db").write_text("db")
     (tmp_path / "logs").mkdir()
     return tmp_path
@@ -82,3 +83,13 @@ def test_menu_enter_quits(home):
 def test_menu_bad_pick(home):
     code, lines, r = run(home, "menu", stdin="9\n")
     assert code == 2 and lines == [] and "pick 1-6" in r.stderr
+
+
+def test_disabled_lanes_are_skipped(home, monkeypatch):
+    cfg = home / "settings.json"
+    cfg.write_text('{"lanes": {"gemini": {"enabled": false}}}')
+    monkeypatch.setenv("JOB_SETTINGS", str(cfg))
+    assert run(home)[1] == ["ran claude", "ran feeds", "total --total claude,feeds"]
+    code, lines, r = run(home, "gemini", "feeds")
+    assert lines == ["ran feeds", "total --total feeds"]
+    assert "skip gemini (disabled in config/settings.json)" in r.stdout

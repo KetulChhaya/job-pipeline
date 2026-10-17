@@ -130,3 +130,12 @@ def test_progress_lines(tmp_path, monkeypatch, con, prof):
     assert lines[1].startswith("[ 1/1] github/feed-a") and lines[1].endswith("  2 fresh")
     assert lines[-2:] == ["0 already appended · descriptions fetched: 0", "kept 1 · dropped family 1"]
     assert errors == ["unknown source: nope"]
+
+
+def test_missing_boards_file_says_how_to_fix(tmp_path):
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "pipeline", "discover.py"),
+                        "--agent", "test", "--sources", "greenhouse",
+                        "--profile", os.path.join(ROOT, "config", "profile.example.json"),
+                        "--config", str(tmp_path / "missing.json"), "--db", str(tmp_path / "s.db"),
+                        "--out-dir", str(tmp_path)], capture_output=True, text=True)
+    assert r.returncode != 0 and "or run ./setup.sh" in r.stderr

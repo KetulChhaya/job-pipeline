@@ -18,9 +18,13 @@ from datetime import datetime, timezone, timedelta
 
 import requests
 
-UA = {"User-Agent": "job-pipeline/1.0 (personal job search; contact in repo README)"}
-TIMEOUT = 25
-SLEEP_BETWEEN_BOARDS = 2
+import settings  # noqa: E402
+
+_FETCH = settings.load()["fetch"]
+UA = {"User-Agent": "job-pipeline/1.0 (personal job search; "
+                    + (f"contact: {_FETCH['contact']})" if _FETCH["contact"] else "contact in repo README)")}
+TIMEOUT = _FETCH["timeout"]
+SLEEP_BETWEEN_BOARDS = _FETCH["board_sleep"]
 
 def load_config(path="config/boards.json"):
     with open(path) as f:

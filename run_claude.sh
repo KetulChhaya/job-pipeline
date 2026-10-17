@@ -6,8 +6,11 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # Use the venv so `python3` has gspread etc. (system python3 doesn't).
 export PATH="$PWD/.venv/bin:$PATH"
+# Model and effort come from config/settings.json (lanes.claude.*).
+MODEL="$(python3 pipeline/settings.py get lanes.claude.model)"
+EFFORT="$(python3 pipeline/settings.py get lanes.claude.effort)"
 exec python3 pipeline/runner.py --agent claude --label "Greenhouse · Ashby · Lever" \
   --stdin prompts/claude.md --stream claude -- \
-  claude -p --model claude-sonnet-5-5 --effort high \
+  claude -p --model "$MODEL" --effort "$EFFORT" \
   --verbose --output-format stream-json --permission-mode acceptEdits \
   --allowedTools "Bash(python3 pipeline/*)" "Bash(python3 -c:*)" "Read" "Edit(pipeline/fetchers.py)" "Edit(config/boards.json)"

@@ -3,17 +3,24 @@
 #   jobhunt                 Claude, Gemini, GitHub feeds, then a total + one notification
 #   jobhunt feeds           only the named lanes, in the order given (claude, gemini, feeds)
 #   jobhunt menu            numbered menu: pick lanes, a feeds dry run, or open the latest log
+# Lanes switched off in config/settings.json (lanes.<name>.enabled) are skipped.
 cd "$(dirname "$0")"
 export PATH="$PWD/.venv/bin:$PATH"
 LANES="claude gemini feeds"
+ENABLED="$(python3 pipeline/settings.py lanes)" || exit 1
 
 run_lanes() {
   export JOB_NOTIFY=0 JOB_RUN_STARTED="$(date +%s)"
   local lane done=""
   for lane in "$@"; do
+    case " $ENABLED " in
+      *" $lane "*) ;;
+      *) echo "skip $lane (disabled in config/settings.json)"; continue ;;
+    esac
     "./run_$lane.sh" || true
     done="$done,$lane"
   done
+  [ -z "$done" ] && return 0
   python3 pipeline/runner.py --total "${done#,}"
 }
 
@@ -50,7 +57,7 @@ EOF
       1) lanes="$lanes claude" ;;
       2) lanes="$lanes gemini" ;;
       3) lanes="$lanes feeds" ;;
-      4) lanes="$LANES" ;;
+      4) lanes="$ENABLED" ;;
       5) feeds_dry_run; return $? ;;
       6) open_latest_log; return $? ;;
       *) echo "pick 1-6, got: $pick" >&2; return 2 ;;
@@ -61,7 +68,7 @@ EOF
 }
 
 case "${1:-}" in
-  "") run_lanes $LANES ;;
+  "") run_lanes $ENABLED ;;
   menu|-m) menu ;;
   *)
     for lane in "$@"; do

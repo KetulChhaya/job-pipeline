@@ -1,0 +1,2 @@
+# Left out of 'git archive' (the share zip): these describe the owner's own search.
+docs/superpowers export-ignore

@@ -6,3 +6,6 @@ pipeline/seen.db
 logs/
 runs/
 candidates_*.json
+config/settings.json
+config/profile.json
+config/boards.json

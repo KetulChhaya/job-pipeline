@@ -12,8 +12,9 @@ import requests
 from add_job import normalize_url
 from fetchers import TIMEOUT, UA, _lever_text, html_to_text
 from progress import progress
+import settings
 
-DETAIL_SLEEP = 1  # seconds between detail requests (SmartRecruiters / Workday)
+DETAIL_SLEEP = settings.load()["fetch"]["detail_sleep"]  # seconds between detail requests
 
 # ----------------------------------------------------------------------- YOE
 _WORDS = {w: i for i, w in enumerate(

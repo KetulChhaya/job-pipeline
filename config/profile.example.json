@@ -1,9 +1,9 @@
 {
- "_comment": "Candidate filter profile. Agents must NOT edit this file. Spec: docs/superpowers/specs/2026-10-15-job-filters-design.md. Patterns are case-insensitive regex fragments matched on whitespace-collapsed text with letter/digit boundaries; wrap a part in (?-i:...) to make it case-sensitive.",
+ "_comment": "EXAMPLE — copy to config/profile.json (./setup.sh does it) and edit max_yoe, needs_sponsorship, family.keep and stack.user_groups/user_terms for your search. Candidate filter profile. Agents must NOT edit this file. Spec: docs/superpowers/specs/2026-10-15-job-filters-design.md. Patterns are case-insensitive regex fragments matched on whitespace-collapsed text with letter/digit boundaries; wrap a part in (?-i:...) to make it case-sensitive.",
  "max_yoe": 5,
  "senior_unknown_yoe": "keep",
  "per_company_per_day": 3,
- "needs_sponsorship": true,
+ "needs_sponsorship": false,
  "location": {
   "ambiguous_remote": "keep",
   "us_cities": [

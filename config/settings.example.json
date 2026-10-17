@@ -1,0 +1,16 @@
+{
+ "_comment": "Copy to config/settings.json (or run ./setup.sh). Every key is optional except sheet.id.",
+ "sheet": {
+  "id": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit",
+  "jobs_tab": "Pipeline Jobs",
+  "runs_tab": "Pipeline Runs",
+  "dedup_tabs": ["LinkedIn Easy Apply"]
+ },
+ "service_account": "service-account.json",
+ "lanes": {
+  "claude": {"enabled": true, "model": "claude-sonnet-5-5", "effort": "high"},
+  "gemini": {"enabled": true, "model": "gemini-3.8-flash-medium", "retries": 3, "retry_wait": 120},
+  "feeds": {"enabled": true}
+ },
+ "fetch": {"hours": 30, "recent_title_days": 3, "timeout": 25, "board_sleep": 2, "detail_sleep": 1, "contact": ""}
+}
